@@ -1,0 +1,16 @@
+{
+  "name": "omnilab",
+  "version": "0.0.0",
+  "private": true,
+  "description": "OmniLab — a Google Classroom-style platform for exact sciences teachers",
+  "scripts": {
+    "dev": "pnpm --filter @omnilab/web dev",
+    "build": "pnpm --filter @omnilab/web build",
+    "typecheck": "pnpm -r --parallel typecheck"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@10.33.2"
+}
