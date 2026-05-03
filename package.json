@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "pnpm --filter @omnilab/web dev",
     "build": "pnpm --filter @omnilab/web build",
-    "typecheck": "pnpm -r --parallel typecheck"
+    "typecheck": "pnpm -r --parallel typecheck",
+    "db:generate": "pnpm --filter @omnilab/db generate",
+    "db:migrate": "pnpm --filter @omnilab/db migrate",
+    "db:studio": "pnpm --filter @omnilab/db studio"
   },
   "engines": {
     "node": ">=20.0.0",

@@ -1,0 +1,226 @@
+// OmniLab database schema
+//
+// Single source of truth for the database structure.
+//   `prisma generate` → produces a typed TypeScript client from this file.
+//   `prisma migrate dev` → diffs this file against the database and writes SQL migrations.
+//
+// Conventions:
+//   - IDs are UUIDs (collision-resistant; safe to expose in URLs).
+//   - Timestamps default to now() on insert; updatedAt auto-bumps on update.
+//   - `Json` fields are stored as PostgreSQL JSONB and validated by Zod in app code.
+//   - Cascade deletes are explicit and conservative — we don't want a stray delete
+//     to wipe out a teacher's labs.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// USERS
+// ============================================================================
+
+enum UserRole {
+  TEACHER
+  STUDENT
+  ADMIN // reserved for internal/staff tooling; not user-selectable
+}
+
+model User {
+  id            String   @id @default(uuid())
+  clerkId       String   @unique // mirrors Clerk's user id; lets us look up "the OmniLab user behind this login"
+  email         String   @unique
+  name          String
+  imageUrl      String?
+  primaryRole   UserRole // default dashboard — NOT a hard capability gate (a teacher can also enroll as a student)
+  preferredLang String   @default("en") // "en" | "he"; affects locale defaults, not the UI chrome
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  authoredLabs   Lab[]         @relation("LabAuthor")
+  taughtClasses  Class[]       @relation("ClassTeacher")
+  enrollments    Enrollment[]
+  hostedSessions LiveSession[] @relation("SessionHost")
+  participations Participant[]
+  assets         Asset[]
+}
+
+// ============================================================================
+// CLASSES — a teacher's roster of students
+// ============================================================================
+
+model Class {
+  id        String   @id @default(uuid())
+  name      String // e.g. "Period 3 — Physics 11"
+  joinCode  String   @unique // 8-char persistent code; students enter once to enroll
+  teacherId String
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  teacher      User          @relation("ClassTeacher", fields: [teacherId], references: [id])
+  enrollments  Enrollment[]
+  liveSessions LiveSession[]
+
+  @@index([teacherId])
+}
+
+model Enrollment {
+  classId   String
+  studentId String
+  joinedAt  DateTime @default(now())
+
+  class   Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student User  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([classId, studentId]) // composite primary key — a student can be in a class at most once
+}
+
+// ============================================================================
+// LABS — the templates teachers author and students experience
+// ============================================================================
+
+enum LabVisibility {
+  PRIVATE // only the author
+  UNLISTED // anyone with the link can copy
+  PUBLISHED // appears in the marketplace
+}
+
+model Lab {
+  id              String        @id @default(uuid())
+  title           String
+  description     String?       @db.Text
+  authorId        String
+  content         Json // JSONB; the slides/blocks tree, validated in app code via Zod (Layer B)
+  contentVersion  Int           @default(1) // bumped when we make breaking changes to the JSON shape
+  coverImageUrl   String?
+  language        String        @default("en")
+  tags            String[]      @default([]) // free-form for v1; structured taxonomy in v1.1
+  visibility      LabVisibility @default(PRIVATE)
+  publishedAt     DateTime?
+  forkedFromLabId String? // tracks copy-on-import lineage for marketplace
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  author       User          @relation("LabAuthor", fields: [authorId], references: [id])
+  forkedFrom   Lab?          @relation("LabForks", fields: [forkedFromLabId], references: [id], onDelete: SetNull)
+  forks        Lab[]         @relation("LabForks")
+  liveSessions LiveSession[]
+
+  @@index([authorId])
+  @@index([visibility, publishedAt]) // marketplace browse: "newest published labs"
+}
+
+// ============================================================================
+// LIVE SESSIONS — instances of a lab running in a classroom
+// ============================================================================
+
+enum SessionMode {
+  ANONYMOUS // students join with nickname only
+  ROSTER // students must be logged-in members of the class
+}
+
+enum SessionState {
+  LOBBY // host hasn't started; students still joining
+  RUNNING // session in progress
+  PAUSED // host paused
+  ENDED // session over; results are frozen
+}
+
+model LiveSession {
+  id              String @id @default(uuid())
+  labId           String
+  contentSnapshot Json // frozen copy of Lab.content at session start — mid-session lab edits don't affect the running session
+  joinCode        String @unique // 6-char ephemeral code (Kahoot-style)
+  hostUserId      String
+  classId         String? // set when mode = ROSTER
+
+  mode  SessionMode  @default(ANONYMOUS)
+  state SessionState @default(LOBBY)
+
+  // Question lifecycle state — written by the host action; read by all clients
+  currentBlockId       String?
+  currentBlockOpenedAt DateTime? // server-stamped; the basis for time-scoring
+  currentBlockClosedAt DateTime?
+
+  startedAt DateTime?
+  endedAt   DateTime?
+  createdAt DateTime  @default(now())
+
+  lab          Lab           @relation(fields: [labId], references: [id])
+  host         User          @relation("SessionHost", fields: [hostUserId], references: [id])
+  class        Class?        @relation(fields: [classId], references: [id])
+  participants Participant[]
+  answers      Answer[]
+
+  @@index([state, createdAt]) // "find active sessions"
+}
+
+// ============================================================================
+// PARTICIPANTS & ANSWERS — per-student state inside a live session
+// ============================================================================
+
+enum ParticipantStatus {
+  ACTIVE
+  DISCONNECTED // socket dropped; can rejoin
+  KICKED // teacher removed
+  LEFT // voluntarily left
+}
+
+model Participant {
+  id         String            @id @default(uuid())
+  sessionId  String
+  userId     String? // null in ANONYMOUS mode
+  nickname   String // displayed name; unique within a session
+  score      Int               @default(0)
+  joinedAt   DateTime          @default(now())
+  lastSeenAt DateTime          @default(now())
+  status     ParticipantStatus @default(ACTIVE)
+
+  session LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  answers Answer[]
+
+  @@unique([sessionId, nickname]) // no duplicate nicknames in the same session
+  @@index([sessionId, status]) // "show me everyone still active in session X"
+}
+
+model Answer {
+  id            String   @id @default(uuid())
+  participantId String
+  sessionId     String // denormalized from participant for fast session-wide queries
+  blockId       String // refers to a quiz block in the session's contentSnapshot
+  payload       Json // answer shape depends on question type (see Layer B)
+  submittedAt   DateTime @default(now()) // server time
+  latencyMs     Int // submittedAt - currentBlockOpenedAt at insert; basis for time-scoring
+  isCorrect     Boolean
+  pointsAwarded Int      @default(0)
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  session     LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, blockId]) // ENFORCED LOCK: one answer per question per student, ever
+  @@index([sessionId, blockId]) // for "what did everyone answer for question X" distribution queries
+}
+
+// ============================================================================
+// ASSETS — S3 references for images and future media uploads
+// ============================================================================
+
+model Asset {
+  id           String   @id @default(uuid())
+  ownerId      String
+  s3Key        String   @unique // path in the S3 bucket; never reused
+  mimeType     String
+  bytes        Int
+  originalName String
+  createdAt    DateTime @default(now())
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+}
