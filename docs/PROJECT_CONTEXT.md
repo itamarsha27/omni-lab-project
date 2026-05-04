@@ -176,18 +176,18 @@ Defense-in-depth uniqueness: the `Answer` and `Participant` constraints exist bo
 - **M0.4a** — `@clerk/nextjs` installed; `<ClerkProvider>` wrapping root layout (`0745b6e`)
 - **M0.4b** — sign-in/up pages, middleware route protection, header with `<UserButton />` and conditional sign-in/sign-up links (`f98b475`)
 - **Localization (in same session as M0.4b)** — `@clerk/localizations`, browser-detect via Accept-Language, `omnilab-locale` cookie override, `/settings` page with toggle, server action with hard reload
+- **M0.4c** — Clerk → Postgres user sync via webhook at `/api/webhooks/clerk`; `svix` signature verification; upserts `User` row on `user.created` / `user.updated`; `packages/db/index.ts` singleton PrismaClient; `CLERK_WEBHOOK_SECRET` in env; verified end-to-end with ngrok + Prisma Studio
+- **M0.5** — Vercel deployment pipeline working. Build command override: `pnpm --filter @omnilab/db generate && next build`. Fixed pnpm 10 build-script blocking for Prisma via `pnpm.onlyBuiltDependencies` in root `package.json`. Live URL: `https://omni-lab-project-web.vercel.app` (build green; auth blocked — see deferred items below).
 
 ### Open follow-ups
 
 - **Translate OmniLab's own UI strings** (not just Clerk). Right tool: `next-intl`. Likely a dedicated milestone in M4.
-- **Sync user preference to `User.preferredLang`** for authenticated users — naturally folds into M0.4c webhook work.
+- **Sync user preference to `User.preferredLang`** — naturally folds into M0.4c webhook work (already done structurally; just needs the field wired in settings UI).
 - **`packages/lab-content`** (Zod schemas for Layer B JSON tree) — defer until the editor needs it.
-- **`packages/db/index.ts`** Prisma client re-export — defer until a consumer needs it.
+- **Clerk production instance + custom domain** — deferred from M0.5. Clerk rejects `*.vercel.app` domains for production instances; a real domain (e.g. `omnilab.app`) is required. When purchased: set up Clerk Production environment, swap Vercel env vars to `pk_live_*` / `sk_live_*`, register a new production webhook in Clerk pointing to the live URL, add its `CLERK_WEBHOOK_SECRET` to Vercel env vars.
 
 ### Next
 
-- **M0.4c — Clerk → Postgres user sync.** Webhook at `/api/webhooks/clerk`, signature verification with `svix`, on `user.created` / `user.updated` upsert into our `User` table. Add `CLERK_WEBHOOK_SECRET` to env. Consider ngrok for local dev.
-- **M0.5 — Vercel deploy.** First public URL. Switch Clerk to `pk_live_*` keys for the deployed environment.
 - **M0.6 — Socket.io realtime server scaffold.** Separate Node service in `apps/realtime`, deployed to Fly.io, Redis adapter via Upstash. Won't have real session logic yet — just the infrastructure.
 
 After M0 closes, the heart of the product begins:
@@ -247,9 +247,18 @@ The user's auto-memory directory at `~/.claude/projects/.../memory/` is *also* p
 ## Dev environment
 
 - User is on **Windows 11**.
-- Project path is `C:\Users\itama\Desktop\OmniLab Project` on desktop (note the space — quote in shell commands).
+- Project path: `C:\Users\itama\omni-lab-project` (moved from the old Desktop path with the space).
 - Default terminal switched to **Git Bash** in VS Code; bash syntax (`&&`, single quotes, etc.) works.
 - The `Bash` tool's PATH does NOT include `node` / `pnpm` — the user runs all `pnpm install`, `pnpm dev`, `pnpm db:migrate` commands themselves and reports back.
+
+## Vercel deployment
+
+- Project: `omni-lab-project` on Vercel, connected to GitHub `main` branch — auto-deploys on push.
+- Live URL: `https://omni-lab-project-web.vercel.app`
+- Root directory set to `apps/web` in Vercel project settings.
+- Build command override: `pnpm --filter @omnilab/db generate && next build`
+- Env vars configured on Vercel: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` (both still `pk_test_*` / `sk_test_*`), `DATABASE_URL`, all `NEXT_PUBLIC_CLERK_*_URL` redirect vars. `CLERK_WEBHOOK_SECRET` not yet set on Vercel (webhook not registered for prod domain yet).
+- **Auth is broken on the live URL** until the Clerk production instance + custom domain are set up (see deferred items).
 
 ## At the start of any session
 
@@ -260,4 +269,4 @@ The user's auto-memory directory at `~/.claude/projects/.../memory/` is *also* p
 
 ---
 
-*Last updated: M0.4b session, after Hebrew localization shipped.*
+*Last updated: M0.5 session — Vercel deploy pipeline working, Clerk production deferred, M0.6 is next.*
