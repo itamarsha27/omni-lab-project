@@ -1,29 +1,30 @@
-import Image from "next/image";
+import Image, { type StaticImageData } from "next/image";
+import logoFull from "../../public/logo-full.png";
+import logoMark from "../../public/logo-mark.png";
 
 type LogoVariant = "full" | "mark";
 
 type LogoProps = {
   /**
    * "full" → wordmark + symbol (use on landing pages, login, headers).
-   * "mark" → symbol only (use in tight spots: lab editor toolbar, favicons, app chrome).
+   * "mark" → symbol only (use in tight spots: editor toolbar, favicons).
    */
   variant?: LogoVariant;
-  /** Width in pixels. Height is computed proportionally. */
+  /** Display width in pixels. Height auto-scales to preserve aspect ratio. */
   width?: number;
-  /** Height in pixels. Width is computed proportionally. */
+  /** Display height in pixels. Width auto-scales to preserve aspect ratio. */
   height?: number;
   className?: string;
   /**
-   * Set to true if this logo is above-the-fold on its page (e.g. the
-   * homepage). Tells Next.js to load it eagerly without lazy-loading.
+   * Set to true when this logo is above-the-fold (e.g. the homepage).
+   * Tells Next.js to load it eagerly and skip lazy-loading.
    */
   priority?: boolean;
 };
 
-const ASSETS: Record<LogoVariant, { src: string; intrinsicWidth: number; intrinsicHeight: number }> = {
-  // Update intrinsicWidth/Height to match the cropped image dimensions if you ever re-export.
-  full: { src: "/logo-full.png", intrinsicWidth: 2000, intrinsicHeight: 1100 },
-  mark: { src: "/logo-mark.png", intrinsicWidth: 2000, intrinsicHeight: 1110 },
+const ASSETS: Record<LogoVariant, StaticImageData> = {
+  full: logoFull,
+  mark: logoMark,
 };
 
 export function Logo({
@@ -33,20 +34,15 @@ export function Logo({
   className,
   priority = false,
 }: LogoProps) {
-  const asset = ASSETS[variant];
-
-  // If only width is given, scale height proportionally (and vice versa).
-  const aspect = asset.intrinsicWidth / asset.intrinsicHeight;
-  const finalWidth = width ?? (height !== undefined ? Math.round(height * aspect) : asset.intrinsicWidth);
-  const finalHeight = height ?? (width !== undefined ? Math.round(width / aspect) : asset.intrinsicHeight);
-
   return (
     <Image
-      src={asset.src}
+      src={ASSETS[variant]}
       alt="OmniLab"
-      width={finalWidth}
-      height={finalHeight}
       className={className}
+      style={{
+        width: width !== undefined ? `${width}px` : "auto",
+        height: height !== undefined ? `${height}px` : "auto",
+      }}
       priority={priority}
     />
   );
