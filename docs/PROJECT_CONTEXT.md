@@ -246,10 +246,12 @@ The user's auto-memory directory at `~/.claude/projects/.../memory/` is *also* p
 
 ## Dev environment
 
-- User is on **Windows 11**.
-- Project path: `C:\Users\itama\omni-lab-project` (moved from the old Desktop path with the space).
+- User is on **Windows 11**, working across two machines — check which one at the start of each session.
+  - **Laptop:** `C:\Users\itama\omni-lab-project`
+  - **Home Desktop:** `C:\Users\itama\Desktop\OmniLab Project` (note the space — quote in shell commands)
 - Default terminal switched to **Git Bash** in VS Code; bash syntax (`&&`, single quotes, etc.) works.
 - The `Bash` tool's PATH does NOT include `node` / `pnpm` — the user runs all `pnpm install`, `pnpm dev`, `pnpm db:migrate` commands themselves and reports back.
+- `.env.local` and `packages/db/.env` are per-machine and gitignored — must be recreated on each machine from `.env.example`.
 
 ## Vercel deployment
 
