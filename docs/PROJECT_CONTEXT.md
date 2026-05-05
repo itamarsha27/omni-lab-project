@@ -40,7 +40,7 @@ Any of these alone exists elsewhere; the combination, with strong sciences depth
 | Math input | MathLive | WYSIWYG equation editor with virtual keyboard |
 | Math rendering | KaTeX | Faster than MathJax; pairs natively with MathLive |
 | Function graphs | Desmos API (embed) | Free for education; switch to JSXGraph later if needed |
-| Block-coding widget | Blockly | One widget type, NOT the editor framework |
+| Block-coding widget | ~~Blockly~~ → Real code editor | Python via Pyodide (in-browser); C#/Java deferred |
 | Database | PostgreSQL via Prisma 6 | Lab content as JSONB |
 | Database hosting | Neon (AWS Frankfurt) | Serverless, scale-to-zero |
 | File storage | AWS S3 + CloudFront | Direct uploads via presigned URLs |
@@ -52,9 +52,10 @@ Any of these alone exists elsewhere; the combination, with strong sciences depth
 | Redis | Upstash | Socket.io adapter, Frankfurt |
 
 **Not chosen / actively rejected:**
-- Blockly as the slide editor framework (Blockly is for block-based programming only; the slide editor is custom)
+- Blockly — originally considered for code widget; replaced by real code editor (Python/Pyodide). Blockly is visual block-coding; teachers want real code.
 - D3 / Chart.js for "Desmos-like" graphing (wrong tool category)
 - Neon Auth (we use Clerk; redundant)
+- PhET simulations — physics widgets will be custom-built (Matter.js recommended)
 
 ---
 
@@ -143,14 +144,27 @@ omni-lab-project/
 └── .npmrc
 ```
 
-**`apps/realtime/` (M0.6 scaffold — not yet deployed):**
+**`apps/realtime/` (deployed M0.6):**
 - `src/index.ts` — Express HTTP + Socket.io server, `/session` namespace stub
-- `Dockerfile` — standalone multi-stage build (build context = `apps/realtime/`)
-- `fly.toml` — Fly.io config (`omnilab-realtime`, region `ams`, shared-cpu-1x 256 MB)
+- `Dockerfile` — standalone multi-stage build
+- `fly.toml` — Fly.io config (`omnilab-realtime`, region `fra`, shared-cpu-1x 256 MB)
 - `.env.example` — `PORT`, `REDIS_URL`, `CORS_ORIGIN`
 
+**`apps/web/src/app/labs/` (M1):**
+- `page.tsx` — My Labs page (RSC, Prisma direct query, lab card grid)
+- `actions.ts` — `createLab`, `renameLab`, `deleteLab` server actions
+- `new-lab-button.tsx` — client component, triggers createLab
+- `lab-card-menu.tsx` — kebab menu (···) with rename/delete dialogs (centered via `fixed`)
+- `[id]/edit/page.tsx` — lab editor page (Google Slides-style two-row top bar)
+- `[id]/edit/lab-editor-actions.tsx` — client: editable title + File dropdown menu
+- `[id]/edit/lab-editor-actions.tsx` — File menu: Rename, Publish (disabled), Initiate (disabled), Delete
+
+**`apps/web/src/components/site-header.tsx` (M1):**
+- Shared header: logo-mark (links to /) + Settings + auth buttons + My Labs link
+- Rendered in root layout — appears on every page
+
 **Future packages (planned, not yet created):**
-- `packages/lab-content/` — Zod schemas for Layer B JSON tree (whenever the editor needs it)
+- `packages/lab-content/` — TypeScript types + Zod schemas for Layer B JSON tree — **CREATE THIS IN M2.1**
 - `packages/ui/` — shared React components (whenever shared UI emerges)
 
 ## Database schema (current — see `packages/db/prisma/schema.prisma`)
@@ -177,13 +191,14 @@ Defense-in-depth uniqueness: the `Answer` and `Participant` constraints exist bo
 - **M0.1** — project skeleton + GitHub remote (`b5324f9`)
 - **M0.2** — Next.js + Tailwind v4 + monorepo (`773bc4d`)
 - **M0.3** — Prisma + Neon Postgres, full schema migrated (`987d92b`)
-- **Logo** — added brand logo PNGs + reusable `<Logo>` component using static imports (`b5adb8b`)
-- **M0.4a** — `@clerk/nextjs` installed; `<ClerkProvider>` wrapping root layout (`0745b6e`)
-- **M0.4b** — sign-in/up pages, middleware route protection, header with `<UserButton />` and conditional sign-in/sign-up links (`f98b475`)
-- **Localization (in same session as M0.4b)** — `@clerk/localizations`, browser-detect via Accept-Language, `omnilab-locale` cookie override, `/settings` page with toggle, server action with hard reload
-- **M0.4c** — Clerk → Postgres user sync via webhook at `/api/webhooks/clerk`; `svix` signature verification; upserts `User` row on `user.created` / `user.updated`; `packages/db/index.ts` singleton PrismaClient; `CLERK_WEBHOOK_SECRET` in env; verified end-to-end with ngrok + Prisma Studio
-- **M0.5** — Vercel deployment pipeline working. Build command override: `pnpm --filter @omnilab/db generate && next build`. Fixed pnpm 10 build-script blocking for Prisma via `pnpm.onlyBuiltDependencies` in root `package.json`. Live URL: `https://omni-lab-project-web.vercel.app` (build green; auth blocked — see deferred items below).
-- **M0.6** — Socket.io realtime server deployed (`815043e`). `apps/realtime/` — Express + Socket.io + ioredis + `@socket.io/redis-adapter`. `/session` namespace stub. Deployed to Fly.io (`omnilab-realtime`, region `fra`). Upstash Redis (Frankfurt) wired via `REDIS_URL` secret. `CORS_ORIGIN` set to Vercel URL. `/health` returns `{"status":"ok"}`. Live at `https://omnilab-realtime.fly.dev`. **Fly.io deploy note:** `flyctl launch --no-deploy` has a region-not-found bug even with valid codes — use `flyctl apps create <name>` instead, then `flyctl secrets set`, then `flyctl deploy`.
+- **Logo** — brand logo PNGs + reusable `<Logo>` component (`b5adb8b`)
+- **M0.4a** — `@clerk/nextjs`; `<ClerkProvider>` wrapping root layout (`0745b6e`)
+- **M0.4b** — sign-in/up pages, middleware route protection, header with `<UserButton />` (`f98b475`)
+- **Localization** — `@clerk/localizations`, browser-detect, `omnilab-locale` cookie, `/settings` toggle
+- **M0.4c** — Clerk → Postgres user sync via webhook; `svix` verification; `User` upsert on created/updated
+- **M0.5** — Vercel deploy pipeline live at `https://omni-lab-project-web.vercel.app` (auth blocked until custom domain)
+- **M0.6** — Socket.io realtime server deployed (`815043e`). Fly.io `omnilab-realtime` (fra) + Upstash Redis. Live: `https://omnilab-realtime.fly.dev/health`. **Fly.io note:** use `flyctl apps create` not `flyctl launch --no-deploy` (region bug).
+- **M1** — My Labs page + lab CRUD (`13cc598` + polish commits). `/labs` page, lab cards with Edit/Publish/Initiate/··· actions. Create/rename/delete labs. Google Slides-style editor top bar (two-row: title row + File menu row). Shared `SiteHeader` on all pages. Homepage CTA buttons.
 
 ### Open follow-ups
 
@@ -194,23 +209,18 @@ Defense-in-depth uniqueness: the `Answer` and `Participant` constraints exist bo
 
 ### Next
 
-**M1 — My Labs page + lab CRUD (in progress)**
+**M2.1 — Canvas Foundation (START HERE)**
 
-Product vision (locked):
-- `/labs` page called "My Labs" — teacher's personal lab library
-- Prominent "New Lab" button (large `+`) — creates a blank lab and redirects to the editor
-- Labs displayed as cards showing: title, description, thumbnail
-- Thumbnail = first slide preview (auto-generated, M2) OR a cover image the teacher uploads (user's choice)
-- Clicking a lab card → redirects to `/labs/[id]/edit` (the lab editor, built in M2)
+This is the first sub-milestone of M2. Build in this order:
+1. Create `packages/lab-content/` — TypeScript types for `LabContent`, `Slide`, `SlideElement` (coordinate space: 1920×1080 pixels as the virtual canvas size, scaled via CSS)
+2. Install in `apps/web`: `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities` (for filmstrip drag-to-reorder)
+3. Build the editor layout: left filmstrip (slide thumbnails) + center 16:9 canvas + right panel placeholder
+4. Slide operations: add, delete, duplicate (right-click), drag-to-reorder, select
+5. Autosave: debounced server action + immediate save on structural changes + Save button + unsaved indicator
+6. Undo/redo: 20-step history stack (useReducer-based)
+7. Wire the `createLab` action to seed the first slide (Title + Content template) instead of empty `{ slides: [] }`
 
-M1 implementation scope (no editor yet — that's M2):
-1. API routes in `apps/web`: `POST /api/labs`, `GET /api/labs`, `GET /api/labs/[id]`
-2. `/labs` page with lab cards + "New Lab" button
-3. Lab record: title, description, empty content JSON, placeholder thumbnail
-
-After M1:
-
-- **M2** — **the lab editor** (5–6 weeks full-time → 8–12 weeks calendar at sustained pace; the long pole of v1)
+After M2:
 - **M3** — live session lobby + Kahoot flow
 - **M4** — landing, polished onboarding, gradebook basics
 - **M5** — marketplace stub (or defer to v1.1)
@@ -288,4 +298,177 @@ The user's auto-memory directory at `~/.claude/projects/.../memory/` is *also* p
 
 ---
 
-*Last updated: M0.6 complete — realtime server live at `https://omnilab-realtime.fly.dev`. M0 fully done. Next: M1 (class/lab CRUD).*
+*Last updated: M1 complete, M2 fully spec'd. Starting M2.1 (canvas foundation) next session.*
+
+---
+
+## READ THIS IF ON M2 — Lab Editor Design Decisions
+
+This section captures the full product Q&A for M2. Answered questions are locked decisions. Unanswered questions still need a response from the user before implementation begins.
+
+### Canvas & Slides
+
+**Q1 — Aspect ratio**
+✅ **16:9 locked as default.** No other options needed — 99% of modern screens are 16:9 and teachers won't print labs.
+
+**Q2 — Slide panel position**
+✅ **Left-side vertical filmstrip.** Mirrors to right side when locale is Hebrew (full RTL layout flip — this applies to the entire editor chrome when in Hebrew mode).
+
+**Q3 — Slide limit**
+✅ **Max 100 slides per lab.** Enforced at save time. Can be raised later based on demand.
+
+**Q4 — Slide backgrounds**
+✅ **User's choice. Default white.** Teacher can change per-slide background color (and eventually gradient/image).
+
+**Q5 — Slide templates**
+✅ **First slide defaults to "Title + Content" layout. Additional slides are blank.**
+
+### Widget Types
+
+**Q6 — Text blocks**
+✅ **Full rich text: bold, italic, size, color, alignment, bullet lists, numbered lists, headings, tables.**
+
+**Q7 — Image blocks**
+✅ **Both upload from device (S3) and embed by URL. Do whichever is easier first; both are needed by v1.**
+
+**Q8 — Video embeds**
+✅ **Yes — YouTube/Vimeo embeds on slides.**
+
+**Q9 — Desmos graphs**
+✅ **Teacher-controlled only in v1.** Teacher configures the graph at authoring time and can add sliders that manipulate parameters live during presentation (e.g. `y = x² + c` with a slider for `c` from 0–10). Students view but do not interact with the graph directly.
+
+**Q10 — Physics simulations**
+✅ **Custom-built physics engine (not PhET).** Must-have for v1: projectile motion, kinematics, basic dynamics. Teachers can place physics objects on a canvas: point masses (balls), ropes, wheels/pulleys. This is a custom widget — not an iframe embed.
+
+**Q11 — Chemistry simulations**
+✅ **Basic chemistry only for v1, deeper later.** Minimum viable: periodic table reference widget and basic reaction display. Full molecule builder / reaction balancer deferred to a later version.
+
+**Q12 — Code blocks**
+✅ **Real code editor + in-browser execution. Blockly is OUT.** Teachers write actual code (language TBD — Python via Pyodide is the strong recommendation: runs in-browser, no server needed, students see output live). Teacher writes e.g. `print("hello world")` or a loop, runs it during the lab, output appears in the widget. No visual block-coding.
+
+**Q13 — Drawing / freehand**
+✅ **Yes, full freehand drawing tool.** Teachers can sketch freely on the canvas — diagrams, annotations, free body diagrams, arrows, anything. This is a core feature, not a nice-to-have.
+
+**Q14 — Shapes**
+✅ **Yes — basic shape library in v1.** Rectangle, circle, triangle, arrow, line. Used for diagrams and annotations alongside the freehand tool.
+
+### Editing Interactions
+
+**Q15 — Snap to grid / alignment guides**
+✅ **Snap to grid on by default; user can disable in an "Advanced" settings panel.** Smart alignment guides (show when dragging near other elements) also included.
+
+**Q16 — Z-ordering**
+✅ **Yes — Bring to front / Send to back in v1.**
+
+**Q17 — Multi-select**
+✅ **Yes — Ctrl+click to select multiple elements; move and delete together.**
+
+**Q18 — Copy/paste across slides**
+✅ **Required in v1.** Implement if straightforward; push to post-v1 only if it proves genuinely complex (expectation: it won't be).
+
+**Q19 — Undo/redo depth**
+✅ **Up to 20 steps. Step cost is widget-dependent:** regular edits = 1 step each; physics simulation state changes = heavier, counted differently to avoid blowing the stack. Undo/redo is granular and context-aware.
+
+**Q20 — Keyboard shortcuts**
+✅ **Yes — standard set required:** Ctrl+Z (undo), Ctrl+Y / Ctrl+Shift+Z (redo), Ctrl+C (copy), Ctrl+V (paste), Ctrl+X (cut), Delete/Backspace (remove selected), arrow keys (nudge element by 1px), Shift+arrow (nudge by 10px).
+
+**Code block languages (addition to Q12)**
+✅ **Python via Pyodide in v1 (runs fully in-browser, no server needed).** C# and Java deferred — they require server-side execution sandboxes or heavy WASM runtimes, not worth the complexity for v1. Revisit post-launch.
+
+### STEM-specific
+
+**Q21 — Standalone equation blocks**
+✅ **Yes — a dedicated "Equation" element type** that renders a KaTeX equation anywhere on the slide (like an equation in Microsoft Word — placed as a content block, not just inside text). Separately, quiz answer inputs also support equation entry via MathLive when the question type calls for it.
+
+**Q22 — Fill-in-the-blank: number of blanks**
+✅ **One blank per equation in v1.** Multiple blanks deferred to post-v1.
+
+**Q23 — Unit handling in numeric answers**
+✅ **Question-dependent: teacher chooses whether the grader checks the number or the unit, but not both simultaneously.** Each numeric question has a setting: "check value" or "check unit". Not both at once in v1.
+
+**Q24 — Graphing quiz**
+⬜ *Deferred post-v1.* Good feature, too complex for now. Students cannot sketch functions or place points on Desmos as an answer in v1.
+
+**Q25 — Lab protocol / procedure blocks**
+⬜ *Not a must-have for v1.* Nice-to-have; revisit after core editor is stable.
+
+**Q26 — Data table widget**
+⬜ *Not a must-have for v1.* Nice-to-have; revisit after core editor is stable.
+
+### Quiz & Assessment
+
+**Q27 — Question types in v1**
+✅ **All of them:** multiple choice (single answer), multiple choice (multi-correct), short text, numeric (with tolerance), equation fill-in-the-blank, true/false.
+
+**Q28 — Answer feedback timing**
+✅ **Live session:** feedback revealed only after the whole class has answered OR the teacher manually closes the question — whichever comes first.
+✅ **Self-study mode:** instant feedback on submit.
+⬜ **Exam mode** (deferred post-v1): answers hidden until the teacher explicitly ends the exam and releases results. Save as a planned feature — `LiveSession.mode` can gain an `EXAM` variant later.
+
+**Q29 — Point values**
+✅ **Configurable per question; default is time-decayed scoring.** Base value = 100 points, drops based on how long the student took to answer (faster = more points, Kahoot-style). Exact decay curve TBD when we implement scoring in M3. Teacher can override with a fixed point value per question if they prefer.
+
+**Q30 — Hints**
+⬜ *Deferred post-v1.* Teacher-authored hints that students can reveal at a point penalty. Planned feature — design the question data model to have an optional `hint` field from day one so it's non-breaking to add later.
+
+**Q31 — Worked solution / explanation**
+✅ **Yes, teacher's choice per question.** Teacher can optionally attach a worked solution/explanation. If attached, it is revealed to students after the question closes (live session) or after they submit (self-study). Teacher can choose not to add one or to keep it hidden.
+
+### Saving & History
+
+**Q32 — Autosave**
+✅ **Both: autosave + explicit Save button.** Autosave triggers on a timer and also immediately on meaningful events (new slide added, slide deleted, widget dropped). Save button always visible for manual saves. Unsaved indicator (dot on title) like VS Code.
+
+**Q33 — Version history**
+⬜ *Deferred post-v1.* Good feature — worth designing the DB to append snapshots cheaply (e.g. periodic `LabVersion` rows) so it's easy to add later.
+
+**Q34 — Offline / connection loss**
+✅ **Warn the user that connection is lost; do not silently queue.** On reconnect, attempt to re-save the current in-memory state. Queuing writes across a disconnect risks silent conflicts — safer to surface the problem and let the teacher decide. (Recommendation accepted.)
+
+### Preview & Student View
+
+**Q35 — "Preview as student" mode**
+✅ **Yes — high priority.** A "Preview" button in the editor launches a full student-view simulation in a new tab (or modal): interactive widgets active, questions answerable, no live session needed. Teacher sees exactly what a student would see.
+
+**Q36 — Presentation / projector mode**
+✅ **Yes, but lower priority for v1.** Full-screen clean slide view. Teacher drags this tab to the projector. Include as v1 but build after the core editor is stable.
+
+**Q37 — Print / PDF export**
+✅ **Yes — static content only.** Export renders each slide to PDF, skipping all interactive widgets (quiz blocks, physics sims, code runners, Desmos interactive sliders). Text, images, static equations (KaTeX), and static graph snapshots are included. Interactive widgets show a placeholder ("Interactive content — open in OmniLab").
+
+### Polish & Power Features
+
+**Q38 — Themes**
+⬜ *Deferred post-v1.* Built-in color themes planned. Add the data model field (`Lab.theme`) now so it's non-breaking to implement later.
+
+**Q39 — Speaker notes**
+✅ **Yes.** Per-slide teacher notes panel in the editor (below the canvas or in a collapsible drawer). Visible only to the teacher during presentation mode, never to students.
+
+**Q40 — Slide transitions / animations**
+✅ **Teacher picks from a preset list** (e.g. None, Fade, Slide, Zoom — mirroring Google Slides presets). Applied per-slide. Stored in the slide's JSON metadata.
+
+**Q41 — Duplicate slide**
+✅ **Yes — via right-click context menu on the slide filmstrip** → "Duplicate slide". Also available from the Edit menu (future).
+
+**Q42 — Reorder slides**
+✅ **Drag to reorder in the filmstrip — essential.** Must feel smooth and fast. Use dnd-kit (already in the stack).
+
+**Q43 — Mobile authoring**
+✅ **Desktop-only for v1.** No responsive layout effort for the editor. Students joining live sessions on mobile is fully supported — only the authoring editor is desktop-only.
+
+**Q44 — Accessibility**
+⬜ *Deferred to v2.* Alt text on images and screen reader support are planned. Flag when adding image blocks to include an `alt` field in the data model so it's non-breaking later.
+
+---
+
+### M2 Build Order (locked)
+
+1. **Canvas foundation** — slide filmstrip, drag/resize/select widgets, undo/redo, autosave
+2. **Text + Equation blocks**
+3. **Quiz blocks** — all 6 question types + grading logic
+4. **Image + Video blocks**
+5. **Freehand drawing + Shapes**
+6. **Desmos graph widget** — teacher-configured with sliders
+7. **Code block** — Python via Pyodide (C# / Java deferred post-v1)
+8. **Physics simulation widget** — most complex, built last
+9. **Preview mode + PDF export + Presentation mode** — caps M2
