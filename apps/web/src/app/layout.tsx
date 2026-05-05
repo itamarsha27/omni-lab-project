@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { heIL } from "@clerk/localizations";
 import { getCurrentLocale } from "@/lib/i18n";
+import { SiteHeader } from "@/components/site-header";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -21,7 +22,10 @@ export default async function RootLayout({
   return (
     <ClerkProvider localization={clerkLocalization}>
       <html lang="en">
-        <body className="antialiased bg-white text-gray-900">{children}</body>
+        <body className="antialiased bg-white text-gray-900">
+          <SiteHeader />
+          {children}
+        </body>
       </html>
     </ClerkProvider>
   );

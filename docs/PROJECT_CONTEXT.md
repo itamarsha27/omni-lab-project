@@ -8,7 +8,7 @@
 
 A Google Classroom–style platform purpose-built for **exact sciences teachers** (math, physics, chemistry, biology). The differentiator is depth in STEM workflows that general-purpose classroom tools handle poorly: equation-heavy authoring, function graphs, lab protocols, quantitative grading.
 
-The user's central abstraction is the **lab** — structurally a PowerPoint/Google Slides–style deck, but each slide can contain **interactive widgets**: equations (KaTeX-rendered), function graphs (Desmos), quizzes, code blocks (Blockly, later), and eventually physics/chemistry simulations. Teachers author labs in a slide-editor UI by dragging widgets onto slides.
+The user's central abstraction is the **lab** — structurally modelled on **Google Slides / PowerPoint** (this is the explicit design muse: the editor UI, top bar with File menu, slide panel, canvas, etc. should feel immediately familiar to anyone who has used those tools). Each slide can contain **interactive widgets**: equations (KaTeX-rendered), function graphs (Desmos), quizzes, code blocks (Blockly, later), and eventually physics/chemistry simulations. Teachers author labs in a slide-editor UI by dragging widgets onto slides.
 
 The second core feature is **live sessions** — Kahoot-style classroom plays where the teacher launches a lab, students join from their phones using a short on-screen code, and progress through the lab interactively with a real-time leaderboard. This is a v1 feature, not a phase-2 add-on.
 
@@ -22,7 +22,7 @@ The third pillar is the **Lab Marketplace** — teachers publish labs for other 
 ## The wedge
 
 Three things in fusion:
-1. Polished slide-deck authoring
+1. **Google Slides–style slide-deck authoring** — familiar UI (File menu, slide panel, canvas), but with deep STEM widgets: equations (KaTeX/MathLive), function graphs (Desmos), physics/chemistry simulations, code blocks. The editor is the moat.
 2. Kahoot-style interactive classroom
 3. Math typesetting quality high enough that students can self-study from a lab
 
@@ -183,7 +183,7 @@ Defense-in-depth uniqueness: the `Answer` and `Participant` constraints exist bo
 - **Localization (in same session as M0.4b)** — `@clerk/localizations`, browser-detect via Accept-Language, `omnilab-locale` cookie override, `/settings` page with toggle, server action with hard reload
 - **M0.4c** — Clerk → Postgres user sync via webhook at `/api/webhooks/clerk`; `svix` signature verification; upserts `User` row on `user.created` / `user.updated`; `packages/db/index.ts` singleton PrismaClient; `CLERK_WEBHOOK_SECRET` in env; verified end-to-end with ngrok + Prisma Studio
 - **M0.5** — Vercel deployment pipeline working. Build command override: `pnpm --filter @omnilab/db generate && next build`. Fixed pnpm 10 build-script blocking for Prisma via `pnpm.onlyBuiltDependencies` in root `package.json`. Live URL: `https://omni-lab-project-web.vercel.app` (build green; auth blocked — see deferred items below).
-- **M0.6** — Socket.io realtime server deployed. `apps/realtime/` — Express + Socket.io + ioredis + `@socket.io/redis-adapter`. `/session` namespace stub. Deployed to Fly.io (`omnilab-realtime`, region `fra`). Upstash Redis (Frankfurt) wired via `REDIS_URL` secret. `CORS_ORIGIN` set to Vercel URL. `/health` returns `{"status":"ok"}`. Live at `https://omnilab-realtime.fly.dev`.
+- **M0.6** — Socket.io realtime server deployed (`815043e`). `apps/realtime/` — Express + Socket.io + ioredis + `@socket.io/redis-adapter`. `/session` namespace stub. Deployed to Fly.io (`omnilab-realtime`, region `fra`). Upstash Redis (Frankfurt) wired via `REDIS_URL` secret. `CORS_ORIGIN` set to Vercel URL. `/health` returns `{"status":"ok"}`. Live at `https://omnilab-realtime.fly.dev`. **Fly.io deploy note:** `flyctl launch --no-deploy` has a region-not-found bug even with valid codes — use `flyctl apps create <name>` instead, then `flyctl secrets set`, then `flyctl deploy`.
 
 ### Open follow-ups
 
@@ -194,11 +194,22 @@ Defense-in-depth uniqueness: the `Answer` and `Participant` constraints exist bo
 
 ### Next
 
-- **M1** — class/lab CRUD. Start here next session.
+**M1 — My Labs page + lab CRUD (in progress)**
 
-After M0 closes, the heart of the product begins:
+Product vision (locked):
+- `/labs` page called "My Labs" — teacher's personal lab library
+- Prominent "New Lab" button (large `+`) — creates a blank lab and redirects to the editor
+- Labs displayed as cards showing: title, description, thumbnail
+- Thumbnail = first slide preview (auto-generated, M2) OR a cover image the teacher uploads (user's choice)
+- Clicking a lab card → redirects to `/labs/[id]/edit` (the lab editor, built in M2)
 
-- **M1** — class/lab CRUD (mostly already designed; light implementation)
+M1 implementation scope (no editor yet — that's M2):
+1. API routes in `apps/web`: `POST /api/labs`, `GET /api/labs`, `GET /api/labs/[id]`
+2. `/labs` page with lab cards + "New Lab" button
+3. Lab record: title, description, empty content JSON, placeholder thumbnail
+
+After M1:
+
 - **M2** — **the lab editor** (5–6 weeks full-time → 8–12 weeks calendar at sustained pace; the long pole of v1)
 - **M3** — live session lobby + Kahoot flow
 - **M4** — landing, polished onboarding, gradebook basics
