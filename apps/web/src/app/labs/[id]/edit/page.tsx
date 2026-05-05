@@ -1,7 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@omnilab/db";
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
 import { LabEditorActions } from "./lab-editor-actions";
 
 export default async function LabEditorPage({
@@ -25,15 +24,8 @@ export default async function LabEditorPage({
 
   return (
     <main className="flex min-h-screen flex-col bg-gray-50">
-      {/* Editor top bar */}
-      <div className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
-        <Link
-          href="/labs"
-          className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
-        >
-          ← My Labs
-        </Link>
-
+      {/* Editor top bar — Google Slides style: title row + menu bar row */}
+      <div className="border-b border-gray-200 bg-white">
         <LabEditorActions labId={lab.id} initialTitle={lab.title} />
       </div>
 

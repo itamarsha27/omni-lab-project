@@ -61,10 +61,10 @@ export function LabCardMenu({
         </>
       )}
 
-      {/* Rename dialog */}
+      {/* Rename dialog — fixed to viewport center */}
       <dialog
         ref={renameRef}
-        className="w-full max-w-sm rounded-xl p-6 shadow-xl [&::backdrop]:bg-black/40"
+        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 m-0 w-full max-w-sm rounded-xl p-6 shadow-xl [&::backdrop]:bg-black/40"
       >
         <h2 className="text-base font-semibold text-gray-900">Rename Lab</h2>
         <form
@@ -100,10 +100,10 @@ export function LabCardMenu({
         </form>
       </dialog>
 
-      {/* Delete confirmation dialog */}
+      {/* Delete confirmation dialog — fixed to viewport center */}
       <dialog
         ref={deleteRef}
-        className="w-full max-w-sm rounded-xl p-6 shadow-xl [&::backdrop]:bg-black/40"
+        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 m-0 w-full max-w-sm rounded-xl p-6 shadow-xl [&::backdrop]:bg-black/40"
       >
         <h2 className="text-base font-semibold text-gray-900">Delete lab?</h2>
         <p className="mt-2 text-sm text-gray-500">
