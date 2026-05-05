@@ -5,6 +5,7 @@
   "description": "OmniLab — a Google Classroom-style platform for exact sciences teachers",
   "scripts": {
     "dev": "pnpm --filter @omnilab/web dev",
+    "dev:realtime": "pnpm --filter @omnilab/realtime dev",
     "build": "pnpm --filter @omnilab/web build",
     "typecheck": "pnpm -r --parallel typecheck",
     "db:generate": "pnpm --filter @omnilab/db generate",

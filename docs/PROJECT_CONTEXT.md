@@ -48,8 +48,8 @@ Any of these alone exists elsewhere; the combination, with strong sciences depth
 | Equation grading | mathjs | Algebraic equivalence (not string match) for student answers |
 | Auth | Clerk | `@clerk/nextjs` ^6, `@clerk/localizations` for i18n |
 | Web hosting | Vercel | Auto-deploy from GitHub |
-| Realtime hosting | Fly.io (planned, M0.6) | Separate from Next.js app for independent scaling |
-| Redis | Upstash (planned) | Socket.io adapter |
+| Realtime hosting | Fly.io | `omnilab-realtime.fly.dev`, region `fra` |
+| Redis | Upstash | Socket.io adapter, Frankfurt |
 
 **Not chosen / actively rejected:**
 - Blockly as the slide editor framework (Blockly is for block-based programming only; the slide editor is custom)
@@ -143,8 +143,13 @@ omni-lab-project/
 └── .npmrc
 ```
 
+**`apps/realtime/` (M0.6 scaffold — not yet deployed):**
+- `src/index.ts` — Express HTTP + Socket.io server, `/session` namespace stub
+- `Dockerfile` — standalone multi-stage build (build context = `apps/realtime/`)
+- `fly.toml` — Fly.io config (`omnilab-realtime`, region `ams`, shared-cpu-1x 256 MB)
+- `.env.example` — `PORT`, `REDIS_URL`, `CORS_ORIGIN`
+
 **Future packages (planned, not yet created):**
-- `apps/realtime/` — Socket.io server (M0.6)
 - `packages/lab-content/` — Zod schemas for Layer B JSON tree (whenever the editor needs it)
 - `packages/ui/` — shared React components (whenever shared UI emerges)
 
@@ -178,6 +183,7 @@ Defense-in-depth uniqueness: the `Answer` and `Participant` constraints exist bo
 - **Localization (in same session as M0.4b)** — `@clerk/localizations`, browser-detect via Accept-Language, `omnilab-locale` cookie override, `/settings` page with toggle, server action with hard reload
 - **M0.4c** — Clerk → Postgres user sync via webhook at `/api/webhooks/clerk`; `svix` signature verification; upserts `User` row on `user.created` / `user.updated`; `packages/db/index.ts` singleton PrismaClient; `CLERK_WEBHOOK_SECRET` in env; verified end-to-end with ngrok + Prisma Studio
 - **M0.5** — Vercel deployment pipeline working. Build command override: `pnpm --filter @omnilab/db generate && next build`. Fixed pnpm 10 build-script blocking for Prisma via `pnpm.onlyBuiltDependencies` in root `package.json`. Live URL: `https://omni-lab-project-web.vercel.app` (build green; auth blocked — see deferred items below).
+- **M0.6** — Socket.io realtime server deployed. `apps/realtime/` — Express + Socket.io + ioredis + `@socket.io/redis-adapter`. `/session` namespace stub. Deployed to Fly.io (`omnilab-realtime`, region `fra`). Upstash Redis (Frankfurt) wired via `REDIS_URL` secret. `CORS_ORIGIN` set to Vercel URL. `/health` returns `{"status":"ok"}`. Live at `https://omnilab-realtime.fly.dev`.
 
 ### Open follow-ups
 
@@ -188,7 +194,7 @@ Defense-in-depth uniqueness: the `Answer` and `Participant` constraints exist bo
 
 ### Next
 
-- **M0.6 — Socket.io realtime server scaffold.** Separate Node service in `apps/realtime`, deployed to Fly.io, Redis adapter via Upstash. Won't have real session logic yet — just the infrastructure.
+- **M1** — class/lab CRUD. Start here next session.
 
 After M0 closes, the heart of the product begins:
 
@@ -271,4 +277,4 @@ The user's auto-memory directory at `~/.claude/projects/.../memory/` is *also* p
 
 ---
 
-*Last updated: M0.5 session — Vercel deploy pipeline working, Clerk production deferred, M0.6 is next.*
+*Last updated: M0.6 complete — realtime server live at `https://omnilab-realtime.fly.dev`. M0 fully done. Next: M1 (class/lab CRUD).*

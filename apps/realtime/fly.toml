@@ -1,0 +1,28 @@
+# Deploy from apps/realtime/ with: fly deploy
+# First-time setup: fly launch --no-deploy (then fill in secrets, then fly deploy)
+
+app = "omnilab-realtime"
+primary_region = "fra"
+
+[build]
+
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
