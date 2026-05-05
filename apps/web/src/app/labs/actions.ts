@@ -1,31 +1,29 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@omnilab/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getOrCreateUser } from "@/lib/get-or-create-user";
+import { createDefaultSlide } from "@omnilab/lab-content";
+import type { LabContent } from "@omnilab/lab-content";
 
 async function getOwnedLab(labId: string) {
-  const { userId: clerkId } = await auth();
-  if (!clerkId) redirect("/sign-in");
-
-  const user = await prisma.user.findUnique({ where: { clerkId } });
-  if (!user) redirect("/sign-in");
-
-  return { userId: user.id, clerkId };
+  const user = await getOrCreateUser();
+  return { userId: user.id };
 }
 
 export async function createLab() {
-  const { userId: clerkId } = await auth();
-  if (!clerkId) redirect("/sign-in");
+  const user = await getOrCreateUser();
 
-  const user = await prisma.user.findUnique({ where: { clerkId } });
-  if (!user) redirect("/sign-in");
+  const initialContent: LabContent = {
+    contentVersion: 1,
+    slides: [createDefaultSlide()],
+  };
 
   const lab = await prisma.lab.create({
     data: {
       title: "Untitled Lab",
-      content: { slides: [] },
+      content: initialContent,
       authorId: user.id,
     },
   });
@@ -53,4 +51,16 @@ export async function deleteLab(labId: string) {
   });
 
   redirect("/labs");
+}
+
+export async function saveLabContent(
+  labId: string,
+  content: LabContent
+): Promise<void> {
+  const { userId } = await getOwnedLab(labId);
+
+  await prisma.lab.update({
+    where: { id: labId, authorId: userId },
+    data: { content },
+  });
 }

@@ -1,16 +1,11 @@
-import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@omnilab/db";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { NewLabButton } from "./new-lab-button";
 import { LabCardMenu } from "./lab-card-menu";
+import { getOrCreateUser } from "@/lib/get-or-create-user";
 
 export default async function MyLabsPage() {
-  const { userId: clerkId } = await auth();
-  if (!clerkId) redirect("/sign-in");
-
-  const user = await prisma.user.findUnique({ where: { clerkId } });
-  if (!user) redirect("/sign-in");
+  const user = await getOrCreateUser();
 
   const labs = await prisma.lab.findMany({
     where: { authorId: user.id },

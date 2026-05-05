@@ -199,6 +199,7 @@ Defense-in-depth uniqueness: the `Answer` and `Participant` constraints exist bo
 - **M0.5** — Vercel deploy pipeline live at `https://omni-lab-project-web.vercel.app` (auth blocked until custom domain)
 - **M0.6** — Socket.io realtime server deployed (`815043e`). Fly.io `omnilab-realtime` (fra) + Upstash Redis. Live: `https://omnilab-realtime.fly.dev/health`. **Fly.io note:** use `flyctl apps create` not `flyctl launch --no-deploy` (region bug).
 - **M1** — My Labs page + lab CRUD (`13cc598` + polish commits). `/labs` page, lab cards with Edit/Publish/Initiate/··· actions. Create/rename/delete labs. Google Slides-style editor top bar (two-row: title row + File menu row). Shared `SiteHeader` on all pages. Homepage CTA buttons.
+- **M2.1** — Canvas Foundation. `packages/lab-content/` workspace package: full v1 TypeScript content model (11 element types, 6 quiz question kinds), `createDefaultSlide()` / `createBlankSlide()` / `parseLabContent()` helpers, `CANVAS_WIDTH=1920` / `CANVAS_HEIGHT=1080` constants. Editor layout: left filmstrip (dnd-kit drag-to-reorder) + 16:9 scaled canvas (ResizeObserver + CSS `position:absolute` inner div) + right panel placeholder. Slide ops: add, delete, duplicate, reorder, select. Autosave: debounced 2 s + immediate on structural changes + Save button + unsaved dot indicator. Undo/redo: 20-step `useReducer` history stack. Keyboard: Ctrl+Z/Y/Shift+Z, Ctrl+S, Delete/Backspace (guarded from inputs). `createLab` seeded with first Title+Content slide. `getOrCreateUser()` helper for lazy Clerk→DB sync (fixes webhook-miss loop).
 
 ### Open follow-ups
 
@@ -209,16 +210,18 @@ Defense-in-depth uniqueness: the `Answer` and `Participant` constraints exist bo
 
 ### Next
 
-**M2.1 — Canvas Foundation (START HERE)**
+**M2.2 — Text + Equation Blocks (START HERE)**
 
-This is the first sub-milestone of M2. Build in this order:
-1. Create `packages/lab-content/` — TypeScript types for `LabContent`, `Slide`, `SlideElement` (coordinate space: 1920×1080 pixels as the virtual canvas size, scaled via CSS)
-2. Install in `apps/web`: `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities` (for filmstrip drag-to-reorder)
-3. Build the editor layout: left filmstrip (slide thumbnails) + center 16:9 canvas + right panel placeholder
-4. Slide operations: add, delete, duplicate (right-click), drag-to-reorder, select
-5. Autosave: debounced server action + immediate save on structural changes + Save button + unsaved indicator
-6. Undo/redo: 20-step history stack (useReducer-based)
-7. Wire the `createLab` action to seed the first slide (Title + Content template) instead of empty `{ slides: [] }`
+This is the second sub-milestone of M2. Build in this order:
+1. Install `react-moveable` (drag + resize elements on canvas), `@tiptap/react` + `@tiptap/starter-kit` + `@tiptap/extension-*` (rich text), `katex` + `react-katex` (equation rendering), `mathlive` (equation editing virtual keyboard).
+2. Element selection system: click an element to select it (yellow/blue handles), click empty canvas to deselect. `selectedElementId: string | null` added to editor state.
+3. `react-moveable` wrapper: drag + resize any selected element. Updates element `x, y, width, height` in the slides array via a new `UPDATE_ELEMENT` reducer action.
+4. Text element renderer + editor: click to select → double-click to enter TipTap edit mode. Full rich text: bold, italic, heading, bullet list, numbered list, color, alignment, tables.
+5. Equation element renderer + editor: KaTeX renders the `latex` string. Click to select → double-click to open MathLive inline editor.
+6. Add-element toolbar: a small horizontal toolbar above the canvas (or floating) with buttons: `T` (add text), `∑` (add equation). Clicking inserts a new element at the center of the canvas with default size.
+7. Element z-ordering: right-click context menu on selected element → "Bring to front" / "Send to back" (updates `zIndex`).
+8. Delete selected element: Delete/Backspace key deletes the selected element (not the slide) when an element is selected. Existing slide-delete still fires when no element is selected.
+9. Wire undo/redo through element edits (each moveable drag-end + each TipTap blur + each MathLive close = 1 history entry).
 
 After M2:
 - **M3** — live session lobby + Kahoot flow
@@ -298,7 +301,7 @@ The user's auto-memory directory at `~/.claude/projects/.../memory/` is *also* p
 
 ---
 
-*Last updated: M1 complete, M2 fully spec'd. Starting M2.1 (canvas foundation) next session.*
+*Last updated: M2.1 complete. Starting M2.2 (Text + Equation blocks) next session.*
 
 ---
 

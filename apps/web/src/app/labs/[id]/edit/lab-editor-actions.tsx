@@ -7,9 +7,13 @@ import { renameLab, deleteLab } from "../../actions";
 export function LabEditorActions({
   labId,
   initialTitle,
+  isDirty = false,
+  onSave,
 }: {
   labId: string;
   initialTitle: string;
+  isDirty?: boolean;
+  onSave?: () => void;
 }) {
   const [title, setTitle] = useState(initialTitle);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -63,15 +67,21 @@ export function LabEditorActions({
           <button
             onClick={() => setEditingTitle(true)}
             title="Click to rename"
-            className="max-w-xs truncate rounded px-1 py-0.5 text-sm font-medium text-gray-800 hover:bg-gray-100 transition-colors"
+            className="flex items-center gap-1 max-w-xs rounded px-1 py-0.5 text-sm font-medium text-gray-800 hover:bg-gray-100 transition-colors"
           >
             {title}
+            {isDirty && (
+              <span
+                className="inline-block h-1.5 w-1.5 rounded-full bg-gray-400 shrink-0"
+                title="Unsaved changes"
+              />
+            )}
           </button>
         )}
       </div>
 
-      {/* Row 2 — menu bar (File + future: Edit, View, Insert, …) */}
-      <div className="flex items-center px-3 pb-1">
+      {/* Row 2 — menu bar (File + future: Edit, View, Insert, …) + Save */}
+      <div className="flex items-center justify-between px-3 pb-1">
         <div className="relative">
           <button
             onClick={() => setFileMenuOpen((v) => !v)}
@@ -123,6 +133,20 @@ export function LabEditorActions({
             </>
           )}
         </div>
+
+        {/* Save button */}
+        {onSave && (
+          <button
+            onClick={onSave}
+            className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
+              isDirty
+                ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                : "bg-gray-100 text-gray-400 cursor-default"
+            }`}
+          >
+            Save
+          </button>
+        )}
       </div>
 
       {/* Delete confirmation dialog — fixed to viewport center */}
