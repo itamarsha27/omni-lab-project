@@ -214,7 +214,7 @@ export function TextElement({
         />
       )}
 
-      {isSelected && isEditing && (
+      {isSelected && isEditing && editor && (
         <FormatToolbarPortal editor={editor} anchorRef={rootRef} />
       )}
     </div>
