@@ -90,9 +90,66 @@
 
 **`createLab` updated** — seeds first slide with Title+Content template instead of `{ slides: [] }`.
 
+### What we built — M2.2 Text + Equation blocks (later in the day)
+
+**Element model + factories**
+- `createTextElement()` and `createEquationElement()` in `@omnilab/lab-content` for the toolbar to use.
+- `EquationElement.fontSize?: number` added to the type — the equation's display font-size in canvas px (decoupled from box size).
+
+**Reducer extensions** (`lab-editor.tsx`)
+- New actions: `SELECT_ELEMENT`, `ADD_ELEMENT`, `UPDATE_ELEMENT`, `MOVE_ELEMENT_LIVE`, `DELETE_ELEMENT`, `BRING_TO_FRONT`, `SEND_TO_BACK`, `SNAPSHOT`.
+- `SNAPSHOT` + `MOVE_ELEMENT_LIVE` pattern: drag/resize fires `SNAPSHOT` once at threshold (4 screen px) to record the pre-drag state in the undo stack, then 60fps `MOVE_ELEMENT_LIVE` updates `present` without polluting history. Result: one drag = exactly one undo step.
+- Delete/Backspace now only removes the selected element (slide deletion moved to filmstrip right-click only — Delete-deletes-slide footgun removed by user request).
+
+**Drag-from-toolbar (custom palette drop)**
+- First attempt: click button → enters draw mode → drag on canvas. User rejected — wanted Figma-style drag from the button itself.
+- Final: `onMouseDown` on **T** / **∑** registers window mousemove/mouseup. A ghost tag (`createPortal` to `document.body`) follows the cursor, turning indigo when over the canvas. Drop inside canvas → element placed centered on the drop point at default size; drop outside → cancel.
+
+**Custom drag/resize handles** — react-moveable scrapped
+- Initial implementation used `react-moveable`. It misbehaves inside CSS-scaled containers (translate values vs. screen-space mouse deltas) — handles didn't track correctly and resizing was buggy.
+- Replaced with `elements/element-handles.tsx`: 8 corner/edge handles + a selection outline rendered **outside** the scaled canvas div, in container-relative screen space (`element.x * scale`). Each handle wires its own window mousemove for resizing with min-size clamping (40×20).
+- `useElementDrag` hook: shared movement logic for text and equation elements. `e.preventDefault()` on the mousedown is critical — without it, Chromium on Windows hijacks the gesture as native text-selection and silently kills the window mousemove listener.
+
+**Text element (TipTap)**
+- TipTap rich text editor with StarterKit + Color + TextStyle + TextAlign + Tables.
+- `immediatelyRender: false` to avoid Next.js SSR hydration mismatches.
+- Shrinking-on-edit bug: format toolbar was inside the scaled canvas (visually halved); TipTap also stripped inline `font-size` on `<p>` tags. Fixed both:
+  1. `FormatToolbarPortal` rendered via portal to `document.body`, repositioned on scroll/resize using `getBoundingClientRect()`.
+  2. Base `font-size: 48` set on the text-element wrapper so view-mode HTML and TipTap's `.ProseMirror` inherit the same starting size.
+- Added shared CSS in `globals.css` for `.tiptap-content` and `.ProseMirror` — zero `<p>` margins, heading sizes, table borders — so view and edit render identically.
+- **Formatting applies to the whole text box** (not just current paragraph): per product decision, every command in the toolbar runs `editor.chain().focus().selectAll()` first. Insert-table is the only exception (still inserts at cursor).
+
+**Equation element (KaTeX + MathLive)**
+- View mode: `katex.renderToString(latex, { displayMode: true })` with `dangerouslySetInnerHTML`.
+- Edit mode: popup editor in a portal at native screen size — bypasses canvas scaling so the math-field is full-size and clickable.
+- Quick-insert toolbar: 15 Word-style template buttons (fraction, √, n-th root, x^n, x_n, Σ, ∫, lim, π, θ, ∞, ≤, ≥, ≠, ±) — each renders a KaTeX preview as the button label.
+- Font-size selector: 12 / 14 / 16 / 18 / 24 / 32 (UI labels are doubled for canvas px → 24, 28, 32, 36, 48, 64). Stored in `element.fontSize`. Default 64.
+- Live preview as you type: `onInput` writes to a `draftLatex` state, the slide-rendered KaTeX picks it up immediately.
+- Click outside / Done commits, Cancel reverts.
+- `math-virtual-keyboard-policy="manual"` so the on-screen keyboard appears when the keyboard icon on the math-field is clicked.
+- **No auto-scaling on resize.** First version derived font-size from box height — user wanted explicit control instead. Resizing the box now only widens/narrows the equation's container (long equations = wider box).
+
+**Filmstrip preview**
+- `SlideThumbnail` now actually renders elements inside the scaled `THUMB_SCALE` div (was background-only). Text via `dangerouslySetInnerHTML`, equations via KaTeX, other types as colored placeholders.
+
+**Right-click menu on elements**
+- Re-uses the existing `ContextMenu` (shared with filmstrip). Items: "Bring to front" / "Send to back".
+
+**Background**
+- Editor `<main>` and canvas wrapper changed from `bg-gray-50`/`bg-gray-100` to `#e8e8e8` for clearer contrast against the white slide.
+
+**Packages installed**
+- `react-moveable` (later removed from imports), `@tiptap/react` + `@tiptap/starter-kit` + 5 extensions (color, text-style, text-align, table×4), `katex`, `mathlive`, `@types/katex`.
+
+### What we learned today
+- **react-moveable inside a CSS-scaled container is fragile.** The library uses matrix transforms for parent transforms but applying drag deltas via `transform: translate()` in the element's local coordinate system caused visible drift. Switching to plain `position: absolute` + `getBoundingClientRect()` math (`screenDelta / scale`) is dramatically more predictable.
+- **Custom drag handlers MUST `e.preventDefault()` on mousedown.** Chromium on Windows starts a native text-selection drag otherwise, captures the mouse, and silently breaks `window.addEventListener('mousemove')`. `userSelect: none` is not enough.
+- **TipTap `useEditor` needs `immediatelyRender: false`** in Next.js App Router — the editor can't initialize on the server.
+- **Anything that needs to escape the scaled canvas** (selection handles, format toolbar, equation popup) should be rendered in container-relative or screen-relative space, not as a child of the 1920×1080 div. Nesting a counter-scaled element inside the scaled div technically works but is full of off-by-scale-factor pitfalls.
+
 ### What's next
-- **M2.2 — Text + Equation blocks**: react-moveable for drag/resize, TipTap rich text editor, KaTeX + MathLive for equation elements, element selection system, add-element toolbar.
+- **M2.3 — Quiz blocks**: 6 question types (mc-single, mc-multi, short-text, numeric, equation-fill, true/false), grading helpers, max one quiz per slide enforced at save.
 
 ### Stats
-- Files created: ~10 new (`packages/lab-content/src/`, `editor-canvas.tsx`, `slide-filmstrip.tsx`, `slide-thumbnail.tsx`, `context-menu.tsx`, `lab-editor.tsx`, `get-or-create-user.ts`, `dashboard/page.tsx`)
-- Files modified: `actions.ts`, `lab-editor-actions.tsx`, `page.tsx` (editor), `next.config.ts`, `apps/web/package.json`, `.env.example`
+- Files created: ~10 new (`packages/lab-content/src/`, `editor-canvas.tsx`, `slide-filmstrip.tsx`, `slide-thumbnail.tsx`, `context-menu.tsx`, `lab-editor.tsx`, `get-or-create-user.ts`, `dashboard/page.tsx`); plus M2.2: `elements/element-toolbar.tsx`, `elements/element-handles.tsx`, `elements/text-element.tsx`, `elements/equation-element.tsx`, `elements/use-element-drag.ts`.
+- Files modified: `actions.ts`, `lab-editor-actions.tsx`, `page.tsx` (editor), `next.config.ts`, `apps/web/package.json`, `.env.example`; plus M2.2: `lab-editor.tsx`, `editor-canvas.tsx`, `slide-thumbnail.tsx`, `globals.css`, `lab-content/src/types.ts`, `lab-content/src/index.ts`.

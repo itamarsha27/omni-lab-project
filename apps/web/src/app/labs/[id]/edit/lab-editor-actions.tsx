@@ -9,11 +9,13 @@ export function LabEditorActions({
   initialTitle,
   isDirty = false,
   onSave,
+  toolbarSlot,
 }: {
   labId: string;
   initialTitle: string;
   isDirty?: boolean;
   onSave?: () => void;
+  toolbarSlot?: React.ReactNode;
 }) {
   const [title, setTitle] = useState(initialTitle);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -80,8 +82,8 @@ export function LabEditorActions({
         )}
       </div>
 
-      {/* Row 2 — menu bar (File + future: Edit, View, Insert, …) + Save */}
-      <div className="flex items-center justify-between px-3 pb-1">
+      {/* Row 2 — File menu + element toolbar + Save (mirrors Google Slides format bar) */}
+      <div className="flex items-center px-3 pb-1 gap-1">
         <div className="relative">
           <button
             onClick={() => setFileMenuOpen((v) => !v)}
@@ -134,7 +136,15 @@ export function LabEditorActions({
           )}
         </div>
 
-        {/* Save button */}
+        {/* Element toolbar — T, ∑, … */}
+        {toolbarSlot && (
+          <div className="flex items-center gap-0.5 border-l border-gray-200 pl-2 ml-1">
+            {toolbarSlot}
+          </div>
+        )}
+
+        {/* Save button pushed to the right */}
+        <div className="ml-auto" />
         {onSave && (
           <button
             onClick={onSave}

@@ -3,9 +3,49 @@
 import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import katex from "katex";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "@omnilab/lab-content";
-import type { Slide } from "@omnilab/lab-content";
+import type { Slide, SlideElement } from "@omnilab/lab-content";
 import { ContextMenu, type ContextMenuItem } from "./context-menu";
+
+function ThumbElement({ el }: { el: SlideElement }) {
+  const base: React.CSSProperties = {
+    position: "absolute",
+    left: el.x,
+    top: el.y,
+    width: el.width,
+    height: el.height,
+    zIndex: el.zIndex,
+    overflow: "hidden",
+  };
+  if (el.type === "text") {
+    return (
+      <div
+        style={base}
+        dangerouslySetInnerHTML={{ __html: el.content }}
+      />
+    );
+  }
+  if (el.type === "equation") {
+    const html = katex.renderToString(el.latex, { throwOnError: false, displayMode: true });
+    return (
+      <div
+        style={{ ...base, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40 }}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    );
+  }
+  // Placeholder for other types — keep the structural footprint visible.
+  return (
+    <div
+      style={{
+        ...base,
+        background: "rgba(99, 102, 241, 0.08)",
+        border: "1px dashed #c7d2fe",
+      }}
+    />
+  );
+}
 
 const THUMB_W = 160;
 const THUMB_H = Math.round((THUMB_W * CANVAS_HEIGHT) / CANVAS_WIDTH); // 90px
@@ -95,7 +135,13 @@ export function SlideThumbnail({
               position: "absolute",
               pointerEvents: "none",
             }}
-          />
+          >
+            {[...slide.elements]
+              .sort((a, b) => a.zIndex - b.zIndex)
+              .map((el) => (
+                <ThumbElement key={el.id} el={el} />
+              ))}
+          </div>
         </div>
 
         {/* Slide number badge */}

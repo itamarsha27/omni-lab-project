@@ -1,6 +1,6 @@
 export * from "./types";
 
-import type { Slide, LabContent } from "./types";
+import type { Slide, LabContent, TextElement, EquationElement } from "./types";
 
 // Virtual canvas dimensions — elements are positioned in this coordinate space
 // and scaled to fit the display container via CSS transform.
@@ -41,6 +41,39 @@ export function createDefaultSlide(): Slide {
         zIndex: 1,
       },
     ],
+  };
+}
+
+/** Default text element inserted by the toolbar T button. */
+export function createTextElement(overrides?: Partial<TextElement>): TextElement {
+  return {
+    id: makeId(),
+    type: "text",
+    // Font sizing is applied by the editor (text-element wrapper), not inline,
+    // so view-mode and TipTap edit-mode stay visually identical.
+    content: "<p>Text</p>",
+    x: 560,
+    y: 460,
+    width: 800,
+    height: 160,
+    zIndex: 1,
+    ...overrides,
+  };
+}
+
+/** Default equation element inserted by the toolbar ∑ button. */
+export function createEquationElement(overrides?: Partial<EquationElement>): EquationElement {
+  return {
+    id: makeId(),
+    type: "equation",
+    latex: "x^2",
+    x: 660,
+    y: 480,
+    width: 600,
+    height: 120,
+    zIndex: 1,
+    fontSize: 64, // ≈ "32" in the UI selector (we double the user-facing label for canvas px)
+    ...overrides,
   };
 }
 

@@ -43,6 +43,8 @@ export interface TextElement extends BaseElement {
 export interface EquationElement extends BaseElement {
   type: "equation";
   latex: string;
+  /** Font size in canvas px. Box width controls equation width (overflow:hidden). */
+  fontSize?: number;
 }
 
 export interface ImageElement extends BaseElement {

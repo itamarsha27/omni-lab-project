@@ -1,1 +1,51 @@
 @import "tailwindcss";
+
+/* ─── Lab editor: TipTap + view-mode text consistency ─────────────────────────
+ * Both view-mode (dangerouslySetInnerHTML on .tiptap-content) and edit-mode
+ * (TipTap's .ProseMirror) need the same paragraph/heading metrics so the box
+ * doesn't appear to "shrink" when entering edit mode.
+ */
+.tiptap-content,
+.ProseMirror {
+  outline: none;
+  height: 100%;
+  width: 100%;
+}
+.tiptap-content p,
+.ProseMirror p {
+  margin: 0;
+  line-height: 1.25;
+}
+.tiptap-content h1,
+.ProseMirror h1 {
+  font-size: 1.6em;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.15;
+}
+.tiptap-content h2,
+.ProseMirror h2 {
+  font-size: 1.3em;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.2;
+}
+.tiptap-content ul,
+.ProseMirror ul,
+.tiptap-content ol,
+.ProseMirror ol {
+  margin: 0;
+  padding-left: 1.5em;
+}
+.tiptap-content table,
+.ProseMirror table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.tiptap-content td,
+.tiptap-content th,
+.ProseMirror td,
+.ProseMirror th {
+  border: 1px solid #d1d5db;
+  padding: 4px 8px;
+}

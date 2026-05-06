@@ -18,6 +18,15 @@
   },
   "packageManager": "pnpm@10.33.2",
   "pnpm": {
-    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "prisma", "sharp", "@clerk/shared"]
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "sharp",
+      "@clerk/shared"
+    ]
+  },
+  "dependencies": {
+    "@prisma/client": "^7.8.0"
   }
 }

@@ -3,6 +3,17 @@
 > **For a fresh Claude Code session (especially on a different machine):** read this file end-to-end before doing anything else. It captures the architectural and product decisions that have been locked, where we are in the build, and how to collaborate with the user. The codebase alone does not encode the *why*.
 
 ---
+## RESPONSE DEFAULTS (apply to every reply unless I override):
+
+- Answer directly. No preamble, filler, affirmations, or trailing summary clauses.
+
+- Use plain prose or tight lists. No decorative headers for short answers.
+
+- Do not use Extended Thinking or web search unless my prompt is explicitly complex or time-sensitive.
+
+- At 15+ messages, offer once to summarize key context for a fresh chat.
+
+- If I request a correction, note once that editing my last message saves tokens.”
 
 ## What OmniLab is
 
@@ -200,6 +211,7 @@ Defense-in-depth uniqueness: the `Answer` and `Participant` constraints exist bo
 - **M0.6** — Socket.io realtime server deployed (`815043e`). Fly.io `omnilab-realtime` (fra) + Upstash Redis. Live: `https://omnilab-realtime.fly.dev/health`. **Fly.io note:** use `flyctl apps create` not `flyctl launch --no-deploy` (region bug).
 - **M1** — My Labs page + lab CRUD (`13cc598` + polish commits). `/labs` page, lab cards with Edit/Publish/Initiate/··· actions. Create/rename/delete labs. Google Slides-style editor top bar (two-row: title row + File menu row). Shared `SiteHeader` on all pages. Homepage CTA buttons.
 - **M2.1** — Canvas Foundation. `packages/lab-content/` workspace package: full v1 TypeScript content model (11 element types, 6 quiz question kinds), `createDefaultSlide()` / `createBlankSlide()` / `parseLabContent()` helpers, `CANVAS_WIDTH=1920` / `CANVAS_HEIGHT=1080` constants. Editor layout: left filmstrip (dnd-kit drag-to-reorder) + 16:9 scaled canvas (ResizeObserver + CSS `position:absolute` inner div) + right panel placeholder. Slide ops: add, delete, duplicate, reorder, select. Autosave: debounced 2 s + immediate on structural changes + Save button + unsaved dot indicator. Undo/redo: 20-step `useReducer` history stack. Keyboard: Ctrl+Z/Y/Shift+Z, Ctrl+S, Delete/Backspace (guarded from inputs). `createLab` seeded with first Title+Content slide. `getOrCreateUser()` helper for lazy Clerk→DB sync (fixes webhook-miss loop).
+- **M2.2** — Text + Equation blocks. Reducer extended with element actions + `SNAPSHOT`/`MOVE_ELEMENT_LIVE` pattern (one drag = one undo step). **Drag-from-toolbar**: T / ∑ buttons act as drag handles — mousedown on the button → ghost tag follows cursor (`createPortal` to body) → drop on canvas creates element centered on cursor at default size. **Custom resize handles** (`elements/element-handles.tsx`): 8 corner/edge handles + selection outline rendered outside the scaled canvas div in container-relative px (`element.x * scale`). react-moveable was tried first and abandoned — it's fragile inside CSS-scaled containers. **Text element**: TipTap (StarterKit + Color + TextStyle + TextAlign + Tables, `immediatelyRender:false`); FormatToolbar lives in a portal at native screen size; base `font-size:48` on the wrapper so view-mode HTML and `.ProseMirror` render identically. Formatting commands run `selectAll()` first → alignment, headings, color, lists apply to the whole text box (per Q15-extended product call). **Equation element**: KaTeX view mode + popup MathLive editor in a portal (Word-style — quick-insert toolbar with 15 templates, font-size selector 12/14/16/18/24/32, live preview, virtual keyboard via `math-virtual-keyboard-policy="manual"`). `EquationElement.fontSize?: number` field added; box can be widened to fit longer equations (no auto-scaling). **Filmstrip thumbnails** now render elements (text + KaTeX + placeholder boxes). **Right-click menu** on elements: Bring to front / Send to back. Delete/Backspace deletes element only (slide deletion via filmstrip context menu). Editor background changed from gray-50/100 to `#e8e8e8` for clearer slide contrast. `e.preventDefault()` on every custom-drag mousedown — without it Chromium on Windows hijacks the gesture as native text-selection. Packages: `react-moveable` (installed but unused), `@tiptap/react` + starter-kit + 5 extensions, `katex`, `mathlive`.
 
 ### Open follow-ups
 
@@ -210,21 +222,29 @@ Defense-in-depth uniqueness: the `Answer` and `Participant` constraints exist bo
 
 ### Next
 
-**M2.2 — Text + Equation Blocks (START HERE)**
+**M2.3 — Quiz Blocks (START HERE)**
 
-This is the second sub-milestone of M2. Build in this order:
-1. Install `react-moveable` (drag + resize elements on canvas), `@tiptap/react` + `@tiptap/starter-kit` + `@tiptap/extension-*` (rich text), `katex` + `react-katex` (equation rendering), `mathlive` (equation editing virtual keyboard).
-2. Element selection system: click an element to select it (yellow/blue handles), click empty canvas to deselect. `selectedElementId: string | null` added to editor state.
-3. `react-moveable` wrapper: drag + resize any selected element. Updates element `x, y, width, height` in the slides array via a new `UPDATE_ELEMENT` reducer action.
-4. Text element renderer + editor: click to select → double-click to enter TipTap edit mode. Full rich text: bold, italic, heading, bullet list, numbered list, color, alignment, tables.
-5. Equation element renderer + editor: KaTeX renders the `latex` string. Click to select → double-click to open MathLive inline editor.
-6. Add-element toolbar: a small horizontal toolbar above the canvas (or floating) with buttons: `T` (add text), `∑` (add equation). Clicking inserts a new element at the center of the canvas with default size.
-7. Element z-ordering: right-click context menu on selected element → "Bring to front" / "Send to back" (updates `zIndex`).
-8. Delete selected element: Delete/Backspace key deletes the selected element (not the slide) when an element is selected. Existing slide-delete still fires when no element is selected.
-9. Wire undo/redo through element edits (each moveable drag-end + each TipTap blur + each MathLive close = 1 history entry).
+The third sub-milestone of M2. The data model already exists (`QuizElement` in `packages/lab-content/src/types.ts` — discriminated union of 6 question kinds: `mc-single`, `mc-multi`, `short-text`, `numeric`, `equation-fill`, `true-false`). What's missing is the **renderer + authoring UI + grading helpers**.
+
+Build in this order:
+1. **Add `createQuizElement()` factory** in `packages/lab-content/src/index.ts`. Default `kind: "mc-single"` with two empty options.
+2. **`elements/quiz-element.tsx`** — renderer that switches on `question.kind`:
+   - View mode (always visible): question prompt + answer-input UI (radio buttons / checkboxes / text input / numeric input / MathLive blank / true-false buttons). Read-only in the editor; interactive in M3 live sessions.
+   - Edit mode (double-click): a properties panel in the popup (or in the right panel) — kind dropdown, prompt textarea, options list (add/remove), correct-answer pickers, points field, time-decay toggle, optional `explanation` field (Q31).
+3. **Equation-fill question editor**: MathLive math-field with the `\boxed{?_blankId}` placeholder; teacher fills in `correctLatex`. Re-use the popup math-field pattern from `equation-element.tsx`.
+4. **Numeric question**: value, tolerance, unit-or-value toggle (Q23 — checkUnit boolean). Use `mathjs` later in M3 for grading.
+5. **Multi-correct UI**: checkbox list, multiple correct answers stored in `correctIndices[]`.
+6. **Constraint** (per locked product decision): max one quiz per slide. Validate at save time in `saveLabContent` server action — return error if a slide has more than one quiz element. Block the toolbar's "add quiz" button when the current slide already has one.
+7. **Quiz toolbar button**: add a `?` (or `Q`) drag-from-toolbar button next to T / ∑. Same drag-from-button pattern.
+8. **Filmstrip thumbnails**: render quiz blocks as a recognizable placeholder (not interactive in the thumbnail).
+9. **Author-facing only**: no scoring, no submission, no answer-correctness logic in M2.3. That all moves to M3 (live session). For now we just author the question; grading-runtime is a stub.
+
+Open product questions still to answer before / during build:
+- Default points (probably 100, time-decayed = true).
+- Where the quiz-properties UI lives — popup like equation, or right-panel sidebar (currently a placeholder `<aside>`)?
 
 After M2:
-- **M3** — live session lobby + Kahoot flow
+- **M3** — live session lobby + Kahoot flow + quiz grading runtime (uses `mathjs` for equation-fill / numeric).
 - **M4** — landing, polished onboarding, gradebook basics
 - **M5** — marketplace stub (or defer to v1.1)
 
@@ -301,7 +321,7 @@ The user's auto-memory directory at `~/.claude/projects/.../memory/` is *also* p
 
 ---
 
-*Last updated: M2.1 complete. Starting M2.2 (Text + Equation blocks) next session.*
+*Last updated: M2.2 complete. Starting M2.3 (Quiz blocks) next session.*
 
 ---
 

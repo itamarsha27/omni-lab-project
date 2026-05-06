@@ -1,12 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef } from "react";
-import { createBlankSlide, parseLabContent } from "@omnilab/lab-content";
-import type { LabContent, Slide } from "@omnilab/lab-content";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import {
+  createBlankSlide,
+  createTextElement,
+  createEquationElement,
+  parseLabContent,
+  CANVAS_WIDTH,
+} from "@omnilab/lab-content";
+import type { LabContent, Slide, SlideElement } from "@omnilab/lab-content";
 import { saveLabContent } from "../../actions";
 import { LabEditorActions } from "./lab-editor-actions";
 import { SlideFilmstrip } from "./slide-filmstrip";
 import { EditorCanvas } from "./editor-canvas";
+import { ElementToolbar } from "./elements/element-toolbar";
 
 // ============================================================================
 // State & reducer
@@ -18,6 +26,14 @@ export type EditorAction =
   | { type: "DUPLICATE_SLIDE"; index: number }
   | { type: "REORDER_SLIDES"; fromIndex: number; toIndex: number }
   | { type: "SELECT_SLIDE"; index: number }
+  | { type: "SELECT_ELEMENT"; id: string | null }
+  | { type: "ADD_ELEMENT"; slideIndex: number; element: SlideElement }
+  | { type: "UPDATE_ELEMENT"; slideIndex: number; element: SlideElement }
+  | { type: "MOVE_ELEMENT_LIVE"; slideIndex: number; element: SlideElement }
+  | { type: "DELETE_ELEMENT"; slideIndex: number; elementId: string }
+  | { type: "BRING_TO_FRONT"; slideIndex: number; elementId: string }
+  | { type: "SEND_TO_BACK"; slideIndex: number; elementId: string }
+  | { type: "SNAPSHOT" }
   | { type: "UNDO" }
   | { type: "REDO" }
   | { type: "MARK_SAVED" };
@@ -33,6 +49,7 @@ interface HistoryState {
 interface EditorState {
   history: HistoryState;
   selectedIndex: number;
+  selectedElementId: string | null;
   isDirty: boolean;
 }
 
@@ -42,12 +59,8 @@ function cloneSlides(slides: Slide[]): Slide[] {
 
 function cloneSlide(slide: Slide): Slide {
   const clone = JSON.parse(JSON.stringify(slide)) as Slide;
-  // Give the duplicate a fresh id so it's independent
   clone.id = crypto.randomUUID();
-  clone.elements = clone.elements.map((el) => ({
-    ...el,
-    id: crypto.randomUUID(),
-  }));
+  clone.elements = clone.elements.map((el) => ({ ...el, id: crypto.randomUUID() }));
   return clone;
 }
 
@@ -69,100 +82,99 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       const newSlide = createBlankSlide();
       const next = [...slides];
       next.splice(action.afterIndex + 1, 0, newSlide);
-      return {
-        history: pushHistory(history, next),
-        selectedIndex: action.afterIndex + 1,
-        isDirty: true,
-      };
+      return { history: pushHistory(history, next), selectedIndex: action.afterIndex + 1, selectedElementId: null, isDirty: true };
     }
-
     case "DELETE_SLIDE": {
       if (slides.length <= 1) return state;
       const next = slides.filter((_, i) => i !== action.index);
-      const newSelected = clamp(
-        action.index === slides.length - 1 ? action.index - 1 : action.index,
-        0,
-        next.length - 1
-      );
-      return {
-        history: pushHistory(history, next),
-        selectedIndex: newSelected,
-        isDirty: true,
-      };
+      const newSelected = clamp(action.index === slides.length - 1 ? action.index - 1 : action.index, 0, next.length - 1);
+      return { history: pushHistory(history, next), selectedIndex: newSelected, selectedElementId: null, isDirty: true };
     }
-
     case "DUPLICATE_SLIDE": {
       const dupe = cloneSlide(slides[action.index]!);
       const next = [...slides];
       next.splice(action.index + 1, 0, dupe);
-      return {
-        history: pushHistory(history, next),
-        selectedIndex: action.index + 1,
-        isDirty: true,
-      };
+      return { history: pushHistory(history, next), selectedIndex: action.index + 1, selectedElementId: null, isDirty: true };
     }
-
     case "REORDER_SLIDES": {
       const next = cloneSlides(slides);
       const [moved] = next.splice(action.fromIndex, 1);
       if (!moved) return state;
       next.splice(action.toIndex, 0, moved);
-      const newSelected =
-        selectedIndex === action.fromIndex
-          ? action.toIndex
-          : selectedIndex;
-      return {
-        history: pushHistory(history, next),
-        selectedIndex: newSelected,
-        isDirty: true,
-      };
+      const newSelected = selectedIndex === action.fromIndex ? action.toIndex : selectedIndex;
+      return { history: pushHistory(history, next), selectedIndex: newSelected, selectedElementId: null, isDirty: true };
     }
-
     case "SELECT_SLIDE":
-      return { ...state, selectedIndex: action.index };
-
+      return { ...state, selectedIndex: action.index, selectedElementId: null };
+    case "SELECT_ELEMENT":
+      return { ...state, selectedElementId: action.id };
+    case "ADD_ELEMENT": {
+      const next = cloneSlides(slides);
+      const slide = next[action.slideIndex];
+      if (!slide) return state;
+      slide.elements = [...slide.elements, action.element];
+      return { history: pushHistory(history, next), selectedIndex, selectedElementId: action.element.id, isDirty: true };
+    }
+    case "UPDATE_ELEMENT": {
+      const next = cloneSlides(slides);
+      const slide = next[action.slideIndex];
+      if (!slide) return state;
+      slide.elements = slide.elements.map((el) => el.id === action.element.id ? action.element : el);
+      return { history: pushHistory(history, next), selectedIndex, selectedElementId: state.selectedElementId, isDirty: true };
+    }
+    case "MOVE_ELEMENT_LIVE": {
+      const next = cloneSlides(slides);
+      const slide = next[action.slideIndex];
+      if (!slide) return state;
+      slide.elements = slide.elements.map((el) => el.id === action.element.id ? action.element : el);
+      return { ...state, history: { ...history, present: next }, isDirty: true };
+    }
+    case "DELETE_ELEMENT": {
+      const next = cloneSlides(slides);
+      const slide = next[action.slideIndex];
+      if (!slide) return state;
+      slide.elements = slide.elements.filter((el) => el.id !== action.elementId);
+      return { history: pushHistory(history, next), selectedIndex, selectedElementId: null, isDirty: true };
+    }
+    case "BRING_TO_FRONT": {
+      const next = cloneSlides(slides);
+      const slide = next[action.slideIndex];
+      if (!slide) return state;
+      const maxZ = Math.max(0, ...slide.elements.map((el) => el.zIndex));
+      slide.elements = slide.elements.map((el) => el.id === action.elementId ? { ...el, zIndex: maxZ + 1 } : el);
+      return { history: pushHistory(history, next), selectedIndex, selectedElementId: state.selectedElementId, isDirty: true };
+    }
+    case "SEND_TO_BACK": {
+      const next = cloneSlides(slides);
+      const slide = next[action.slideIndex];
+      if (!slide) return state;
+      const minZ = Math.min(0, ...slide.elements.map((el) => el.zIndex));
+      slide.elements = slide.elements.map((el) => el.id === action.elementId ? { ...el, zIndex: minZ - 1 } : el);
+      return { history: pushHistory(history, next), selectedIndex, selectedElementId: state.selectedElementId, isDirty: true };
+    }
+    case "SNAPSHOT": {
+      const past = [...history.past, history.present].slice(-MAX_HISTORY);
+      return { ...state, history: { past, present: history.present, future: [] } };
+    }
     case "UNDO": {
       if (history.past.length === 0) return state;
       const previous = history.past[history.past.length - 1]!;
-      return {
-        history: {
-          past: history.past.slice(0, -1),
-          present: previous,
-          future: [history.present, ...history.future],
-        },
-        selectedIndex: clamp(selectedIndex, 0, previous.length - 1),
-        isDirty: true,
-      };
+      return { history: { past: history.past.slice(0, -1), present: previous, future: [history.present, ...history.future] }, selectedIndex: clamp(selectedIndex, 0, previous.length - 1), selectedElementId: null, isDirty: true };
     }
-
     case "REDO": {
       if (history.future.length === 0) return state;
       const next = history.future[0]!;
-      return {
-        history: {
-          past: [...history.past, history.present],
-          present: next,
-          future: history.future.slice(1),
-        },
-        selectedIndex: clamp(selectedIndex, 0, next.length - 1),
-        isDirty: true,
-      };
+      return { history: { past: [...history.past, history.present], present: next, future: history.future.slice(1) }, selectedIndex: clamp(selectedIndex, 0, next.length - 1), selectedElementId: null, isDirty: true };
     }
-
     case "MARK_SAVED":
       return { ...state, isDirty: false };
-
     default:
       return state;
   }
 }
 
 function initState(content: LabContent): EditorState {
-  return {
-    history: { past: [], present: content.slides, future: [] },
-    selectedIndex: 0,
-    isDirty: false,
-  };
+  return { history: { past: [], present: content.slides, future: [] }, selectedIndex: 0, selectedElementId: null, isDirty: false };
 }
 
 // ============================================================================
@@ -172,29 +184,32 @@ function initState(content: LabContent): EditorState {
 interface LabEditorProps {
   labId: string;
   initialTitle: string;
-  initialContent: unknown; // raw Prisma Json
+  initialContent: unknown;
 }
 
-export function LabEditor({
-  labId,
-  initialTitle,
-  initialContent,
-}: LabEditorProps) {
+interface PaletteDrag {
+  type: "text" | "equation";
+  mouseX: number;
+  mouseY: number;
+  overCanvas: boolean;
+}
+
+export function LabEditor({ labId, initialTitle, initialContent }: LabEditorProps) {
   const content = parseLabContent(initialContent);
   const [state, dispatch] = useReducer(editorReducer, content, initState);
+  const [paletteDrag, setPaletteDrag] = useState<PaletteDrag | null>(null);
+
+  const canvasRef = useRef<HTMLDivElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const slidesRef = useRef(state.history.present);
   slidesRef.current = state.history.present;
   const selectedIndexRef = useRef(state.selectedIndex);
   selectedIndexRef.current = state.selectedIndex;
-
-  // ── Save helpers ──────────────────────────────────────────────────────────
+  const selectedElementIdRef = useRef(state.selectedElementId);
+  selectedElementIdRef.current = state.selectedElementId;
 
   const doSave = useCallback(async () => {
-    const payload: LabContent = {
-      contentVersion: 1,
-      slides: slidesRef.current,
-    };
+    const payload: LabContent = { contentVersion: 1, slides: slidesRef.current };
     await saveLabContent(labId, payload);
     dispatch({ type: "MARK_SAVED" });
   }, [labId]);
@@ -204,83 +219,158 @@ export function LabEditor({
     saveTimerRef.current = setTimeout(() => void doSave(), 2000);
   }, [doSave]);
 
-  // Autosave on content changes
   useEffect(() => {
     if (state.isDirty) scheduleSave();
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.history.present, state.isDirty]);
-
-  // ── Keyboard shortcuts ────────────────────────────────────────────────────
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
-      const isTyping =
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable;
+      const isTyping = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable || target.tagName === "MATH-FIELD";
 
       if (e.ctrlKey || e.metaKey) {
-        if (e.key === "z" && !e.shiftKey) {
-          e.preventDefault();
-          dispatch({ type: "UNDO" });
-        } else if (e.key === "y" || (e.key === "z" && e.shiftKey)) {
-          e.preventDefault();
-          dispatch({ type: "REDO" });
-        } else if (e.key === "s") {
-          e.preventDefault();
-          void doSave();
+        if (e.key === "z" && !e.shiftKey) { e.preventDefault(); dispatch({ type: "UNDO" }); }
+        else if (e.key === "y" || (e.key === "z" && e.shiftKey)) { e.preventDefault(); dispatch({ type: "REDO" }); }
+        else if (e.key === "s") { e.preventDefault(); void doSave(); }
+      } else if (e.key === "Escape") {
+        dispatch({ type: "SELECT_ELEMENT", id: null });
+      } else if ((e.key === "Delete" || e.key === "Backspace") && !isTyping) {
+        const elId = selectedElementIdRef.current;
+        if (elId) {
+          dispatch({ type: "DELETE_ELEMENT", slideIndex: selectedIndexRef.current, elementId: elId });
         }
-      } else if (
-        (e.key === "Delete" || e.key === "Backspace") &&
-        !isTyping
-      ) {
-        dispatch({ type: "DELETE_SLIDE", index: selectedIndexRef.current });
+        // Slide deletion via Delete key removed — slides are deleted via filmstrip right-click menu only.
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [doSave]);
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Drag-from-toolbar to canvas ───────────────────────────────────────────
+  // Mousedown on T/∑ → ghost follows cursor → mouseup on canvas creates element.
+  const startPaletteDrag = useCallback(
+    (type: "text" | "equation", e: React.MouseEvent) => {
+      e.preventDefault();
+      const initial: PaletteDrag = {
+        type,
+        mouseX: e.clientX,
+        mouseY: e.clientY,
+        overCanvas: false,
+      };
+      setPaletteDrag(initial);
+
+      function isOverCanvas(x: number, y: number): boolean {
+        const c = canvasRef.current;
+        if (!c) return false;
+        const r = c.getBoundingClientRect();
+        return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+      }
+
+      function onMove(ev: MouseEvent) {
+        setPaletteDrag({
+          type,
+          mouseX: ev.clientX,
+          mouseY: ev.clientY,
+          overCanvas: isOverCanvas(ev.clientX, ev.clientY),
+        });
+      }
+
+      function onUp(ev: MouseEvent) {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        setPaletteDrag(null);
+
+        const c = canvasRef.current;
+        if (!c) return;
+        const r = c.getBoundingClientRect();
+        if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) {
+          return; // dropped outside canvas — cancel
+        }
+        const scale = r.width / CANVAS_WIDTH;
+        const cx = (ev.clientX - r.left) / scale;
+        const cy = (ev.clientY - r.top) / scale;
+        const factory = type === "text" ? createTextElement : createEquationElement;
+        // Center the new element on the drop point
+        const def = factory();
+        const el = factory({
+          x: cx - def.width / 2,
+          y: cy - def.height / 2,
+        });
+        dispatch({ type: "ADD_ELEMENT", slideIndex: selectedIndexRef.current, element: el });
+      }
+
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    },
+    []
+  );
 
   const slides = state.history.present;
   const currentSlide = slides[state.selectedIndex] ?? slides[0]!;
 
   return (
-    <main className="flex h-screen flex-col bg-gray-50 overflow-hidden">
-      {/* Top bar */}
+    <main className="flex h-screen flex-col bg-[#e8e8e8] overflow-hidden">
       <div className="shrink-0 border-b border-gray-200 bg-white">
         <LabEditorActions
           labId={labId}
           initialTitle={initialTitle}
           isDirty={state.isDirty}
           onSave={() => void doSave()}
+          toolbarSlot={
+            <ElementToolbar
+              onStartDrag={startPaletteDrag}
+              activeType={paletteDrag?.type ?? null}
+            />
+          }
         />
       </div>
 
-      {/* Editor body */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left filmstrip */}
-        <SlideFilmstrip
-          slides={slides}
-          selectedIndex={state.selectedIndex}
-          dispatch={dispatch}
-        />
+        <SlideFilmstrip slides={slides} selectedIndex={state.selectedIndex} dispatch={dispatch} />
 
-        {/* Canvas area */}
-        <div className="flex flex-1 items-center justify-center overflow-hidden bg-gray-100 p-6">
+        <div className="flex flex-1 items-center justify-center overflow-hidden bg-[#e8e8e8] p-6">
           <div className="w-full max-w-5xl shadow-xl">
-            <EditorCanvas slide={currentSlide} />
+            <EditorCanvas
+              slide={currentSlide}
+              slideIndex={state.selectedIndex}
+              selectedElementId={state.selectedElementId}
+              dispatch={dispatch}
+              containerRef={canvasRef}
+              isDropTarget={paletteDrag?.overCanvas ?? false}
+            />
           </div>
         </div>
 
-        {/* Right panel — placeholder for M2.2+ */}
         <aside className="w-60 shrink-0 border-l border-gray-200 bg-white" />
       </div>
+
+      {/* Ghost cursor while dragging from toolbar */}
+      {paletteDrag &&
+        createPortal(
+          <div
+            style={{
+              position: "fixed",
+              left: paletteDrag.mouseX + 14,
+              top: paletteDrag.mouseY + 14,
+              pointerEvents: "none",
+              zIndex: 99999,
+              padding: "4px 10px",
+              background: paletteDrag.overCanvas ? "#6366f1" : "#9ca3af",
+              color: "white",
+              fontSize: 13,
+              fontWeight: 500,
+              borderRadius: 6,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+              userSelect: "none",
+            }}
+          >
+            {paletteDrag.type === "text" ? "T  Text" : "∑  Equation"}
+            {!paletteDrag.overCanvas && <span style={{ opacity: 0.7, marginLeft: 6 }}>· drag onto slide</span>}
+          </div>,
+          document.body
+        )}
     </main>
   );
 }
