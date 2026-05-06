@@ -8,7 +8,9 @@ import type { EquationElement as EquationElementType } from "@omnilab/lab-conten
 import type { EditorAction } from "../lab-editor";
 import { useElementDrag } from "./use-element-drag";
 
-declare global {
+// React 19 / Next 15 resolves IntrinsicElements via React.JSX, not the global JSX
+// namespace — module augmentation (not `declare global`) is what gets picked up.
+declare module "react" {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace JSX {
     interface IntrinsicElements {
