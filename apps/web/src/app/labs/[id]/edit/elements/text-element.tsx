@@ -164,7 +164,7 @@ export function TextElement({
 
   useEffect(() => {
     if (editor && !isEditing && editor.getHTML() !== element.content) {
-      editor.commands.setContent(element.content, false);
+      editor.commands.setContent(element.content, { emitUpdate: false });
     }
   }, [editor, element.content, isEditing]);
 
