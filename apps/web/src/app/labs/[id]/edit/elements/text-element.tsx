@@ -224,12 +224,18 @@ export function TextElement({
     function measureAndFit() {
       const proseEl = rootRef.current?.querySelector<HTMLElement>(".ProseMirror");
       if (!proseEl) return;
-      // Buffer keeps the cursor's line off the overflow:hidden boundary and
-      // gives the box a small visual margin below the last line.
+      const lastChild = proseEl.lastElementChild as HTMLElement | null;
+      if (!lastChild) return;
+      // Can't use proseEl.scrollHeight: .ProseMirror has `height: 100%` so
+      // when content fits, scrollHeight === clientHeight === wrapper height.
+      // That hides shrink-room. Last child's `offsetTop + offsetHeight` gives
+      // the content's true bottom in canvas-px coordinates regardless of the
+      // wrapper's height.
       const BUFFER = 8;
-      const target = proseEl.scrollHeight + BUFFER;
+      const target = lastChild.offsetTop + lastChild.offsetHeight + BUFFER;
       const el = elementRef.current;
-      if (target !== el.height) {
+      // Small tolerance prevents per-render bouncing from sub-pixel rounding.
+      if (Math.abs(target - el.height) > 2) {
         dispatch({
           type: "MOVE_ELEMENT_LIVE",
           slideIndex: slideIndexRef.current,
