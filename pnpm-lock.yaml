@@ -59,6 +59,9 @@ importers:
       '@omnilab/lab-content':
         specifier: workspace:*
         version: link:../../packages/lab-content
+      '@prisma/client':
+        specifier: ^6.0.0
+        version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
       '@tiptap/extension-color':
         specifier: ^3.22.5
         version: 3.22.5(@tiptap/extension-text-style@3.22.5(@tiptap/core@3.22.5(@tiptap/pm@3.22.5)))
