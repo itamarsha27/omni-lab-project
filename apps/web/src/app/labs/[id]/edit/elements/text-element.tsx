@@ -11,6 +11,7 @@ import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
+import { Placeholder } from "@tiptap/extension-placeholder";
 import type { TextElement as TextElementType } from "@omnilab/lab-content";
 import type { EditorAction } from "../lab-editor";
 import { useElementDrag } from "./use-element-drag";
@@ -183,10 +184,16 @@ export function TextElement({
       TableRow,
       TableHeader,
       TableCell,
-      // Empty-line `|` placeholder is handled in pure CSS via the
-      // `<br class="ProseMirror-trailingBreak">` ProseMirror inserts into every
-      // empty paragraph — see globals.css. Avoids the Placeholder extension's
-      // decoration timing issues in our scaled-canvas setup.
+      // Adds `is-empty` class to ONLY the empty paragraph that contains the
+      // cursor (showOnlyCurrent: true is the default). The `|` glyph is
+      // hard-coded in CSS via `.is-empty::before` so we don't depend on the
+      // extension setting the data-placeholder attribute. Result: the `|`
+      // appears only on the line you're currently on.
+      Placeholder.configure({
+        placeholder: "",
+        emptyEditorClass: "is-editor-empty",
+        emptyNodeClass: "is-empty",
+      }),
     ],
     content: element.content,
     editorProps: {

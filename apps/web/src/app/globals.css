@@ -27,17 +27,14 @@
   caret-color: auto;
 }
 
-/* Empty-paragraph placeholder — show a faded `|` on every empty line.
+/* Current-line indicator — show a faded `|` on the empty paragraph that
+ * contains the cursor (and only that one).
  *
- * Three selectors cover ProseMirror's variations on "empty paragraph":
- *   1. <p><br class="ProseMirror-trailingBreak"></p>     (the documented form)
- *   2. <p><br></p>                                        (any single <br>)
- *   3. <p></p>                                            (truly empty)
- * Whichever matches, the ::before pseudo renders the same `|`. The pseudo
- * also manifests a line-box for the caret to anchor in. */
-.ProseMirror p:has(> br.ProseMirror-trailingBreak)::before,
-.ProseMirror p:has(> br:only-child)::before,
-.ProseMirror p:empty::before {
+ * The `is-empty` class comes from @tiptap/extension-placeholder configured
+ * with showOnlyCurrent: true (default). The pseudo-element's content is
+ * hard-coded `|` here rather than read from `data-placeholder` so it works
+ * regardless of whether the extension sets the data-attribute. */
+.ProseMirror p.is-empty::before {
   content: "|";
   color: rgba(0, 0, 0, 0.4);
   float: left;
