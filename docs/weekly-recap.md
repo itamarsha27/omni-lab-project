@@ -191,7 +191,7 @@ M2.2 polish + UX quality. Started with a manual bug-list pass on the text/equati
 **Caret invisible on fresh blank lines** — three compounding fixes
 1. `caret-color: auto` on `.ProseMirror` (was hardcoded indigo, then changed to `auto` so the browser picks a contrasting color against the slide background).
 2. `min-height: 1.25em` on `<p>` so empty paragraphs reserve a full line-height worth of vertical space.
-3. Added `@tiptap/extension-placeholder` so an `is-empty::before` pseudo-element manifests a real line-box on empty paragraphs — without inline content, browsers don't anchor the caret. Placeholder is `"|"` with `showOnlyCurrent: false`, so every empty line shows the bar glyph (also serves as a clear "you can type here" affordance).
+3. Added `@tiptap/extension-placeholder` so an `is-empty::before` pseudo-element manifests a real line-box on empty paragraphs — without inline content, browsers don't anchor the caret. Placeholder is `"|"` with default `showOnlyCurrent: true`, so the bar glyph follows the cursor as the user moves between empty lines (clear "type here" affordance).
 
 **Auto-grow on overflow** (`text-element.tsx`)
 - Listens to TipTap's `update` event, reads `proseEl.scrollHeight`, dispatches `MOVE_ELEMENT_LIVE` with `height = scrollHeight + 8` (8 px buffer so the cursor's line isn't flush against the `overflow: hidden` boundary). Uses `MOVE_ELEMENT_LIVE` so per-keystroke grows don't pollute history; the final height lands in history on blur via `commitContent`. Required `elementRef` / `slideIndexRef` so the editor's onBlur closure (created once by `useEditor`) sees the latest auto-grown height.

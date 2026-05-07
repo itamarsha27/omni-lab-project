@@ -186,11 +186,11 @@ export function TextElement({
       TableCell,
       // Adds an `is-empty` class + data-placeholder attr to empty paragraphs.
       // The pseudo-element gives the empty paragraph a line-box so the caret
-      // has somewhere to anchor visibly. `|` shows on every empty line — same
-      // pattern as the earlier "Type here…" prompt but with a single bar glyph.
+      // has somewhere to anchor visibly. Defaults (`showOnlyCurrent: true`)
+      // show the placeholder on the currently-focused empty line — i.e. it
+      // follows the cursor as the user presses Enter into new blank lines.
       Placeholder.configure({
         placeholder: "|",
-        showOnlyCurrent: false,
         emptyEditorClass: "is-editor-empty",
         emptyNodeClass: "is-empty",
       }),
