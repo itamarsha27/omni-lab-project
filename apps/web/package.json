@@ -16,6 +16,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@omnilab/db": "workspace:*",
     "@omnilab/lab-content": "workspace:*",
+    "@prisma/client": "^6.0.0",
     "@tiptap/extension-color": "^3.22.5",
     "@tiptap/extension-placeholder": "^3.22.5",
     "@tiptap/extension-table": "^3.22.5",
