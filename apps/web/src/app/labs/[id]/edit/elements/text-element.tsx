@@ -11,7 +11,6 @@ import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
-import { Placeholder } from "@tiptap/extension-placeholder";
 import type { TextElement as TextElementType } from "@omnilab/lab-content";
 import type { EditorAction } from "../lab-editor";
 import { useElementDrag } from "./use-element-drag";
@@ -184,16 +183,10 @@ export function TextElement({
       TableRow,
       TableHeader,
       TableCell,
-      // Adds an `is-empty` class + data-placeholder attr to empty paragraphs.
-      // The pseudo-element gives the empty paragraph a line-box so the caret
-      // has somewhere to anchor visibly. Defaults (`showOnlyCurrent: true`)
-      // show the placeholder on the currently-focused empty line — i.e. it
-      // follows the cursor as the user presses Enter into new blank lines.
-      Placeholder.configure({
-        placeholder: "|",
-        emptyEditorClass: "is-editor-empty",
-        emptyNodeClass: "is-empty",
-      }),
+      // Empty-line `|` placeholder is handled in pure CSS via the
+      // `<br class="ProseMirror-trailingBreak">` ProseMirror inserts into every
+      // empty paragraph — see globals.css. Avoids the Placeholder extension's
+      // decoration timing issues in our scaled-canvas setup.
     ],
     content: element.content,
     editorProps: {
@@ -218,34 +211,39 @@ export function TextElement({
     }
   }, [editor, element.content, isEditing]);
 
-  // ── Auto-grow: expand box height when content overflows ──────────────────
+  // ── Auto-fit: track box height to content height (grows AND shrinks) ─────
   // While editing, watch ProseMirror's `scrollHeight` (true content height,
-  // ignoring the wrapper's overflow:hidden). When it exceeds the stored height,
-  // dispatch a live update (no history entry per keystroke). On blur, the final
-  // height is preserved because commitContent reads from elementRef.
+  // ignoring overflow:hidden). On every change, resize the box to fit content
+  // exactly — grows when typing past the bottom, shrinks when deleting lines.
+  // Uses MOVE_ELEMENT_LIVE so per-keystroke fits don't pollute history; the
+  // final height lands in history on blur via commitContent (reads elementRef
+  // so it sees the latest auto-fit value).
   useEffect(() => {
     if (!isEditing || !editor) return;
 
-    function measureAndGrow() {
+    function measureAndFit() {
       const proseEl = rootRef.current?.querySelector<HTMLElement>(".ProseMirror");
       if (!proseEl) return;
-      const contentHeight = proseEl.scrollHeight;
+      // Buffer keeps the cursor's line off the overflow:hidden boundary and
+      // gives the box a small visual margin below the last line.
+      const BUFFER = 8;
+      const target = proseEl.scrollHeight + BUFFER;
       const el = elementRef.current;
-      if (contentHeight > el.height) {
+      if (target !== el.height) {
         dispatch({
           type: "MOVE_ELEMENT_LIVE",
           slideIndex: slideIndexRef.current,
-          element: { ...el, height: contentHeight },
+          element: { ...el, height: target },
         });
       }
     }
 
-    // Initial measure (in case existing content was already taller than box).
-    const id = setTimeout(measureAndGrow, 0);
-    editor.on("update", measureAndGrow);
+    // Initial measure (in case existing content already differs from box height).
+    const id = setTimeout(measureAndFit, 0);
+    editor.on("update", measureAndFit);
     return () => {
       clearTimeout(id);
-      editor.off("update", measureAndGrow);
+      editor.off("update", measureAndFit);
     };
   }, [isEditing, editor, dispatch]);
 

@@ -27,16 +27,23 @@
   caret-color: auto;
 }
 
-/* TipTap Placeholder extension — show faded prompt text on empty paragraphs.
- * The pseudo-element also forces a line-box, which fixes the caret-not-
- * appearing-on-fresh-blank-lines bug (no inline content otherwise = no
- * line-box for the caret to anchor in). */
-.ProseMirror p.is-empty::before {
-  content: attr(data-placeholder);
-  color: rgba(0, 0, 0, 0.3);
-  pointer-events: none;
+/* Empty-paragraph placeholder.
+ *
+ * ProseMirror inserts <br class="ProseMirror-trailingBreak"> into every empty
+ * paragraph as a layout placeholder. We piggy-back on it: any <p> containing
+ * that <br> is empty, and the ::before pseudo-element renders a faded "|" so
+ * the user sees where typing will go. The pseudo-content also gives the
+ * paragraph an inline run, which manifests a line-box for the caret to anchor
+ * in (without it, browsers can fail to render the caret on empty paragraphs).
+ *
+ * Pure-CSS: doesn't depend on the Placeholder extension's decoration timing,
+ * which proved unreliable inside our scaled canvas. */
+.ProseMirror p:has(> br.ProseMirror-trailingBreak)::before {
+  content: "|";
+  color: rgba(0, 0, 0, 0.4);
   float: left;
   height: 0;
+  pointer-events: none;
 }
 .tiptap-content p,
 .ProseMirror p {
