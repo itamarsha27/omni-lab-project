@@ -1,6 +1,6 @@
 "use server";
 
-import { prisma } from "@omnilab/db";
+import { prisma, Prisma } from "@omnilab/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getOrCreateUser } from "@/lib/get-or-create-user";
@@ -23,7 +23,7 @@ export async function createLab() {
   const lab = await prisma.lab.create({
     data: {
       title: "Untitled Lab",
-      content: initialContent,
+      content: initialContent as unknown as Prisma.InputJsonValue,
       authorId: user.id,
     },
   });
@@ -61,6 +61,6 @@ export async function saveLabContent(
 
   await prisma.lab.update({
     where: { id: labId, authorId: userId },
-    data: { content },
+    data: { content: content as unknown as Prisma.InputJsonValue },
   });
 }
