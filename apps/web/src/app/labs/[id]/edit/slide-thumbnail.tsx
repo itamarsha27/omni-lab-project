@@ -8,8 +8,18 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from "@omnilab/lab-content";
 import type { Slide, SlideElement } from "@omnilab/lab-content";
 import { ContextMenu, type ContextMenuItem } from "./context-menu";
 
+// Default font sizes — must match the corresponding editor element renderers
+// (text-element.tsx BASE_FONT_PX, equation-element.tsx DEFAULT_FONT_PX) so the
+// thumbnail is a true 1:1 mirror of how the slide renders in the editor.
+const TEXT_FALLBACK_PX = 48;
+const EQUATION_FALLBACK_PX = 48;
+
 function ThumbElement({ el }: { el: SlideElement }) {
-  const base: React.CSSProperties = {
+  // True-mirror rendering: every element is laid out in the same coordinate
+  // space and at the same source font-size as the editor uses. The whole
+  // thumbnail is then CSS-scaled by the parent's transform — equivalent to
+  // taking a screenshot of the slide and shrinking it.
+  const boxed: React.CSSProperties = {
     position: "absolute",
     left: el.x,
     top: el.y,
@@ -21,16 +31,32 @@ function ThumbElement({ el }: { el: SlideElement }) {
   if (el.type === "text") {
     return (
       <div
-        style={base}
-        dangerouslySetInnerHTML={{ __html: el.content }}
-      />
+        style={{
+          ...boxed,
+          fontSize: el.fontSize ?? TEXT_FALLBACK_PX,
+          fontFamily: el.fontFamily ?? "var(--font-sans)",
+        }}
+      >
+        <div
+          className="tiptap-content"
+          dangerouslySetInnerHTML={{ __html: el.content }}
+        />
+      </div>
     );
   }
   if (el.type === "equation") {
     const html = katex.renderToString(el.latex, { throwOnError: false, displayMode: true });
+    // Mirror the editor's equation wrapper exactly: flex-center the KaTeX HTML
+    // so the equation sits dead-center in its box, same as on the slide.
     return (
       <div
-        style={{ ...base, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40 }}
+        style={{
+          ...boxed,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: el.fontSize ?? EQUATION_FALLBACK_PX,
+        }}
         dangerouslySetInnerHTML={{ __html: html }}
       />
     );
@@ -39,7 +65,7 @@ function ThumbElement({ el }: { el: SlideElement }) {
   return (
     <div
       style={{
-        ...base,
+        ...boxed,
         background: "rgba(99, 102, 241, 0.08)",
         border: "1px dashed #c7d2fe",
       }}
@@ -47,8 +73,8 @@ function ThumbElement({ el }: { el: SlideElement }) {
   );
 }
 
-const THUMB_W = 160;
-const THUMB_H = Math.round((THUMB_W * CANVAS_HEIGHT) / CANVAS_WIDTH); // 90px
+const THUMB_W = 220;
+const THUMB_H = Math.round((THUMB_W * CANVAS_HEIGHT) / CANVAS_WIDTH); // ~124px
 const THUMB_SCALE = THUMB_W / CANVAS_WIDTH;
 
 interface SlideThumbnailProps {

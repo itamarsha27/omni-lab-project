@@ -57,6 +57,7 @@ export function createTextElement(overrides?: Partial<TextElement>): TextElement
     width: 800,
     height: 160,
     zIndex: 1,
+    fontSize: 48, // ≈ "24" in the size picker (label is canvas-px ÷ 2)
     ...overrides,
   };
 }
@@ -72,7 +73,7 @@ export function createEquationElement(overrides?: Partial<EquationElement>): Equ
     width: 600,
     height: 120,
     zIndex: 1,
-    fontSize: 64, // ≈ "32" in the UI selector (we double the user-facing label for canvas px)
+    fontSize: 48, // matches default text element; user can scale up via the size picker
     ...overrides,
   };
 }

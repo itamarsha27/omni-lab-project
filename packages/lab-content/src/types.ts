@@ -38,6 +38,10 @@ export interface BaseElement {
 export interface TextElement extends BaseElement {
   type: "text";
   content: string; // HTML (rich text)
+  /** Default font size in canvas px. Headings (h1/h2) scale relative to this. */
+  fontSize?: number;
+  /** CSS font-family stack. Stored as a full stack so absent fonts fall back gracefully. */
+  fontFamily?: string;
 }
 
 export interface EquationElement extends BaseElement {

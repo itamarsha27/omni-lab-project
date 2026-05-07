@@ -7,6 +7,7 @@ import "katex/dist/katex.min.css";
 import type { EquationElement as EquationElementType } from "@omnilab/lab-content";
 import type { EditorAction } from "../lab-editor";
 import { useElementDrag } from "./use-element-drag";
+import { FontSizeControl } from "./font-size-control";
 
 // React 19 / Next 15 resolves IntrinsicElements via React.JSX, not the global JSX
 // namespace — module augmentation (not `declare global`) is what gets picked up.
@@ -34,16 +35,6 @@ interface Props {
   onContextMenu: (e: React.MouseEvent) => void;
 }
 
-// Font-size selector options. UI labels are user-facing point-like values;
-// stored canvas-px is doubled so they render at a sensible size on the 1920×1080 slide.
-const SIZE_OPTIONS: { label: number; value: number }[] = [
-  { label: 12, value: 24 },
-  { label: 14, value: 28 },
-  { label: 16, value: 32 },
-  { label: 18, value: 36 },
-  { label: 24, value: 48 },
-  { label: 32, value: 64 },
-];
 const DEFAULT_FONT_PX = 64;
 
 export function EquationElement({
@@ -59,6 +50,7 @@ export function EquationElement({
   const [popupPos, setPopupPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [draftLatex, setDraftLatex] = useState(element.latex);
   const rootRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
   const mathfieldRef = useRef<HTMLElement>(null);
   const startDrag = useElementDrag({ element, scale, slideIndex, dispatch });
 
@@ -78,37 +70,66 @@ export function EquationElement({
     }
   }, [isEditing, mathliveLoaded]);
 
-  // Position popup just below the equation element on screen, keeping it pinned
-  // there as the page scrolls or window resizes.
+  // Position popup near the equation, flipping above when there isn't room below.
+  // Re-measures on scroll/resize and after the popup renders (so we know its real height).
   useLayoutEffect(() => {
     if (!isEditing) {
       setPopupPos(null);
       return;
     }
     function update() {
-      if (rootRef.current) {
-        const r = rootRef.current.getBoundingClientRect();
-        setPopupPos({ top: r.bottom + 8, left: r.left, width: Math.max(r.width, 480) });
-      }
+      if (!rootRef.current) return;
+      const r = rootRef.current.getBoundingClientRect();
+      const margin = 8;
+      const popupH = popupRef.current?.offsetHeight ?? 360; // estimate before first measure
+      const spaceBelow = window.innerHeight - r.bottom - margin;
+      const spaceAbove = r.top - margin;
+      const placeAbove = spaceBelow < popupH && spaceAbove > spaceBelow;
+      const top = placeAbove
+        ? Math.max(margin, r.top - popupH - margin)
+        : r.bottom + margin;
+      const width = Math.max(r.width, 480);
+      const maxLeft = window.innerWidth - width - margin;
+      const left = Math.min(Math.max(margin, r.left), Math.max(margin, maxLeft));
+      setPopupPos({ top, left, width });
     }
     update();
+    // Re-measure once popup actually rendered (height changes which side it should land on).
+    const raf = requestAnimationFrame(update);
     window.addEventListener("scroll", update, true);
     window.addEventListener("resize", update);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener("scroll", update, true);
       window.removeEventListener("resize", update);
     };
-  }, [isEditing]);
+  }, [isEditing, mathliveLoaded]);
 
-  // Focus the math-field once it mounts.
+  // Seed the math-field with the current latex once the custom element is registered.
+  // `customElements.whenDefined` avoids a race where MathLive hasn't upgraded the
+  // <math-field> element yet (manifests as "Cannot read properties of undefined
+  // (reading 'options')" when we touch internals too early).
   useEffect(() => {
-    if (isEditing && mathliveLoaded && mathfieldRef.current) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mf = mathfieldRef.current as any;
-      mf.value = element.latex; // ensure it has the current latex on (re)open
-      mf.focus?.();
-    }
-  }, [isEditing, mathliveLoaded, element.latex]);
+    if (!isEditing || !mathliveLoaded) return;
+    let cancelled = false;
+    customElements.whenDefined("math-field").then(() => {
+      if (cancelled) return;
+      const mf = mathfieldRef.current;
+      if (!mf) return;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const anyMf = mf as any;
+        if (typeof anyMf.setValue === "function") anyMf.setValue(element.latex);
+        else anyMf.value = element.latex;
+        anyMf.focus?.();
+      } catch (err) {
+        console.warn("[equation-element] failed to seed math-field:", err);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditing, mathliveLoaded, element.id, element.latex]);
 
   function commit() {
     setIsEditing(false);
@@ -206,6 +227,7 @@ export function EquationElement({
               }}
             />
             <div
+              ref={popupRef}
               onMouseDown={(e) => e.stopPropagation()}
               style={{
                 position: "fixed",
@@ -238,28 +260,13 @@ export function EquationElement({
                 </div>
               </div>
 
-              {/* Font size selector */}
-              <div className="mb-2 flex items-center gap-2">
+              {/* Font size: − / input / ▾ presets / + (Word-style) */}
+              <div className="mb-2 flex items-center gap-1.5">
                 <span className="text-[11px] font-medium text-gray-500">Size</span>
-                <div className="flex items-center gap-0.5 rounded border border-gray-200 p-0.5">
-                  {SIZE_OPTIONS.map((s) => {
-                    const active = (element.fontSize ?? DEFAULT_FONT_PX) === s.value;
-                    return (
-                      <button
-                        key={s.label}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => setFontSize(s.value)}
-                        className={`min-w-[28px] rounded px-1.5 py-0.5 text-xs font-medium transition-colors ${
-                          active
-                            ? "bg-indigo-600 text-white"
-                            : "text-gray-600 hover:bg-gray-100"
-                        }`}
-                      >
-                        {s.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <FontSizeControl
+                  valuePx={element.fontSize ?? DEFAULT_FONT_PX}
+                  onChange={setFontSize}
+                />
               </div>
 
               {/* Quick-insert toolbar — Word-style template buttons */}
@@ -279,6 +286,7 @@ export function EquationElement({
               </div>
 
               <math-field
+                key={element.id}
                 ref={mathfieldRef as React.RefObject<HTMLElement>}
                 math-virtual-keyboard-policy="manual"
                 style={{

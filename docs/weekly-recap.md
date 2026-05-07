@@ -153,3 +153,94 @@
 ### Stats
 - Files created: ~10 new (`packages/lab-content/src/`, `editor-canvas.tsx`, `slide-filmstrip.tsx`, `slide-thumbnail.tsx`, `context-menu.tsx`, `lab-editor.tsx`, `get-or-create-user.ts`, `dashboard/page.tsx`); plus M2.2: `elements/element-toolbar.tsx`, `elements/element-handles.tsx`, `elements/text-element.tsx`, `elements/equation-element.tsx`, `elements/use-element-drag.ts`.
 - Files modified: `actions.ts`, `lab-editor-actions.tsx`, `page.tsx` (editor), `next.config.ts`, `apps/web/package.json`, `.env.example`; plus M2.2: `lab-editor.tsx`, `editor-canvas.tsx`, `slide-thumbnail.tsx`, `globals.css`, `lab-content/src/types.ts`, `lab-content/src/index.ts`.
+
+---
+
+## Day 3 — 2026-05-07
+
+### Theme of the day
+M2.2 polish + UX quality. Started with a manual bug-list pass on the text/equation editor before greenlighting M2.3, which uncovered a surprising number of cross-cutting issues: scaled-canvas interactions with ProseMirror's auto-scroll, Tailwind v4's preflight stripping list/font defaults, contenteditable caret rendering on empty paragraphs, and several small product-feel asks (font picker, font-size controller, drag-while-editing, snap to grid). Spent the whole day on these instead of starting M2.3 — call sequence felt right; quality > speed.
+
+### Bugs fixed
+
+**Bold/italic now apply to selection, not whole box** (`text-element.tsx`)
+- Original M2.2 product decision was "all formatting applies to whole textbox" via `selectAll()` before each command. User reversed: selection-based for inline (B/I/H1/H2/P/lists/color/table); whole-box only for L/C/R alignment.
+
+**Equation popup pre-fills with current LaTeX** (`equation-element.tsx`)
+- Race condition: `mf.value = element.latex` ran before MathLive upgraded the `<math-field>` custom element, so opening an existing equation showed an empty editor. Fix: `customElements.whenDefined("math-field").then(...)` before calling `setValue()`. Also keyed the math-field on `element.id` to force clean remount.
+- Same fix kills the spurious `Cannot read properties of undefined (reading 'options')` console error — that was the same race accessing MathLive internals before init.
+
+**Equation popup flips above when near bottom of screen** (`equation-element.tsx`)
+- Was always pinned `r.bottom + 8` (below the equation). Now measures viewport space, places above when below has < popup height. Re-measures via `requestAnimationFrame` so first-render heights are picked up.
+
+**Format toolbar tracks the textbox during drag** (`text-element.tsx`)
+- Toolbar position was measured only on scroll/resize. Drag fires neither, so the toolbar lagged behind the moved box. Fix: pass the element to `FormatToolbarPortal` as a prop so its `useLayoutEffect` re-fires on every position change.
+
+**Drag-while-editing** (`element-handles.tsx`)
+- Mousedown on the text-element body returned early when `isEditing` was true (correct — clicks inside should land in the text editor). But there was no other way to grab the box. Added 4 invisible 10px draggable strips along the selection border, hooked to `useElementDrag`, with z-index below the resize handles so corner resize still wins.
+
+**Tailwind v4 preflight kills list markers** (`globals.css`)
+- `<ul>`/`<ol>` had no bullets/numbers because Tailwind v4 zeroes `list-style` globally. Restored `list-style: disc` / `list-style: decimal` scoped to `.tiptap-content` / `.ProseMirror`.
+
+**Inline `font-family` did not affect editor view** (`globals.css`)
+- After adding the font picker, picking Calibri/David/etc. only applied in the thumbnail. Cause: a `font-family: var(--font-sans)` rule on `.tiptap-content` / `.ProseMirror` overrode the inline `fontFamily` on the wrapper. Removed the rule; let inheritance work.
+
+**Pressing Enter made text disappear** (`text-element.tsx`)
+- ProseMirror auto-calls `scrollIntoView` on every transaction's selection. Combined with the canvas's CSS transform + `overflow: hidden` ancestors, the scroll math went wrong and shifted the visible text out of the box. Fix: `editorProps.handleScrollToSelection: () => true` (suppresses globally). Plus `editor.commands.focus("end", { scrollIntoView: false })` on initial double-click.
+
+**Caret invisible on fresh blank lines** — three compounding fixes
+1. `caret-color: auto` on `.ProseMirror` (was hardcoded indigo, then changed to `auto` so the browser picks a contrasting color against the slide background).
+2. `min-height: 1.25em` on `<p>` so empty paragraphs reserve a full line-height worth of vertical space.
+3. Added `@tiptap/extension-placeholder` so an `is-empty::before` pseudo-element manifests a real line-box on empty paragraphs — without inline content, browsers don't anchor the caret. Placeholder is `"|"` with `showOnlyCurrent: false`, so every empty line shows the bar glyph (also serves as a clear "you can type here" affordance).
+
+**Auto-grow on overflow** (`text-element.tsx`)
+- Listens to TipTap's `update` event, reads `proseEl.scrollHeight`, dispatches `MOVE_ELEMENT_LIVE` with `height = scrollHeight + 8` (8 px buffer so the cursor's line isn't flush against the `overflow: hidden` boundary). Uses `MOVE_ELEMENT_LIVE` so per-keystroke grows don't pollute history; the final height lands in history on blur via `commitContent`. Required `elementRef` / `slideIndexRef` so the editor's onBlur closure (created once by `useEditor`) sees the latest auto-grown height.
+
+**Click outside canvas deselects** (`lab-editor.tsx`)
+- `onMouseDown` on the gray padding wrapper around the canvas + on the right aside, with `e.target === e.currentTarget` so descendant clicks don't trigger deselect. `onMouseDown` (not `onClick`) so deselect happens before any subsequent drag.
+
+**Horizontal snap-to-grid on drag** (`use-element-drag.ts`)
+- New `snapHorizontal()` helper. Snaps element's left edge to slide left (x = 0), right edge to slide right (x = 1920), or horizontal center to slide center (x = 960 − width/2). 24 px threshold. Edges win over center if both are in range (cleaner visual).
+
+### Features added
+
+**Word-style font-size controller** (`font-size-control.tsx` — new shared component)
+- `−` / numeric input / `▾` presets / `+` controller. Type any size, Enter/blur commits, Escape reverts. Step is 2; clamp 6 ≤ label ≤ 200. Preset dropdown lists Word's font sizes (8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72).
+- User-facing label is canvas-px ÷ 2 (typing "42" stores `fontSize: 84`) since 1920×1080 canvases need bigger source pixels than typical document points to read at the same perceptual size.
+- Used in: equation popup, text format toolbar (`size="sm"` variant for the floating toolbar).
+- `TextElement.fontSize?: number` added to the type model. Default 48 in `createTextElement`.
+
+**Font-family picker** (`font-family-control.tsx` — new component)
+- Dropdown of 11 fonts: Default (Inter), Calibri, Cambria, David, Arial, Times New Roman, Georgia, Verdana, Tahoma, Courier New, Comic Sans MS. Each option preview-rendered in its own font. Stored as a full font-family stack (`'"Calibri", "Carlito", "Segoe UI", sans-serif'`) so absent fonts fall back gracefully — Carlito is the metric-compatible Linux clone of Calibri, Frank Ruehl CLM the Linux fallback for David, etc.
+- `TextElement.fontFamily?: string` added. Stored stack is applied via inline `style.fontFamily` on the element wrapper.
+- Inter is the global default, loaded via `next/font/google` and exposed as the `--font-sans` CSS variable. Hooked into Tailwind v4's `@theme` block so `font-sans` utilities resolve to it; html element gets the `inter.variable` class so the variable is defined at the root level.
+
+**Equation default font size aligned to text default**
+- `createEquationElement` default `fontSize: 64 → 48` so a fresh equation reads at the same visual height as a fresh text box.
+
+### Thumbnail saga
+Long arc — five iterations to land on the right behavior.
+1. Started M2.2's strict-proportional rendering: tiny but accurate (~5 px text in a 220-wide thumbnail).
+2. User said unreadable. Bumped source font-size to 96 ("boost"); thumbnail was readable but text was now 2× wider than the proportionally-scaled boxes — content drifted right and got clipped.
+3. Dropped width/height constraints + `whiteSpace: nowrap` to stop wrapping. Solved clipping but broke `text-align: center` (no width = nothing to center against).
+4. Restored width with `overflow: visible`. Fixed centering for one slide but boost still made content drift on the right side.
+5. **Final**: dropped the boost entirely, mirrored the editor 1:1 (same `fontSize`, same `fontFamily`, same wrapper styles). Equation thumbnails use the same flex-centered wrapper as the editor. Text appears small (~5 px for default 48-source text in a 220-wide thumbnail) — accepted tradeoff for true "screenshot" accuracy. `THUMB_W` settled at 220, aside `w-60`.
+
+### Lessons learned
+- **ProseMirror's auto scroll-into-view bites in scaled containers.** `transform: scale()` ancestors + `overflow: hidden` somewhere up the tree = scroll math goes wrong, content ends up shifted off-screen. `editorProps.handleScrollToSelection: () => true` suppresses globally; pair with `focus(_, { scrollIntoView: false })` for explicit focus calls.
+- **Empty `<p><br></p>` doesn't always manifest a line-box.** Without an inline run for the caret to anchor in, the browser doesn't render the caret even on a focused contenteditable. Placeholder's `::before` pseudo-content is the cleanest fix — it builds the line-box and makes the caret render. `min-height` alone reserves vertical space but doesn't create a line-box.
+- **Tailwind v4's `@theme` is great for CSS-variable-based design tokens** (font-sans, colors, etc.) but its preflight can quietly strip defaults you assumed (list-style, font-family chains in some places). Always grep preflight when something visual "doesn't work" globally.
+- **Custom elements + React refs have a race window.** Setting `mf.value = ...` on a `<math-field>` before MathLive's JS upgrades the element fails silently. Always wait via `customElements.whenDefined("math-field").then(...)` before touching custom-element internals. Same pattern applies to any custom element with deferred upgrade (Lit components, custom video players, etc.).
+- **Refs + `useEditor` (TipTap) closures.** `useEditor`'s callbacks (onBlur, etc.) capture closures *once*; they don't see prop updates. For any state that should be "current" at callback time (latest element height after auto-grow), thread it through a `useRef` that's reassigned on every render.
+- **The thumbnail tradeoff is not solvable without compromise.** Either accurate-but-tiny or readable-but-distorted. We picked accurate. If the user later wants both, the fix is bigger thumbnails (e.g., a separate "full-size preview" panel), not changing the rendering math.
+
+### What's next
+- Decision pending: when to start **M2.3 (Quiz blocks)**. The next session.
+- Smaller pending ask: **inline equation inside a text box** (a TipTap inline node + the existing equation popup). User asked, agreed to skip for now, queued for a dedicated pass.
+
+### Stats
+- Files created today: 2 (`elements/font-size-control.tsx`, `elements/font-family-control.tsx`).
+- Files modified today: `text-element.tsx`, `equation-element.tsx`, `element-handles.tsx`, `use-element-drag.ts`, `slide-thumbnail.tsx`, `slide-filmstrip.tsx`, `lab-editor.tsx`, `globals.css`, `layout.tsx`, `packages/lab-content/src/types.ts`, `packages/lab-content/src/index.ts`.
+- New dependency: `@tiptap/extension-placeholder`.
+- Decisions reversed: **inline formatting (bold/italic/etc.) is now selection-based**, not whole-box — only L/C/R alignment remains whole-box.
+- Decisions added: 11-font preset list (Inter default + 10 Word fonts including Calibri & David); horizontal snap-to-grid; auto-grow textbox vertical; click-outside-canvas deselects.

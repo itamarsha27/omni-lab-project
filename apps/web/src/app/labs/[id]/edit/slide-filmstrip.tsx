@@ -43,7 +43,7 @@ export function SlideFilmstrip({
   }
 
   return (
-    <aside className="flex w-44 flex-col border-r border-gray-200 bg-gray-50 overflow-y-auto overflow-x-hidden shrink-0">
+    <aside className="flex w-60 flex-col border-r border-gray-200 bg-gray-50 overflow-y-auto overflow-x-hidden shrink-0">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}

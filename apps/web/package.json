@@ -17,6 +17,7 @@
     "@omnilab/db": "workspace:*",
     "@omnilab/lab-content": "workspace:*",
     "@tiptap/extension-color": "^3.22.5",
+    "@tiptap/extension-placeholder": "^3.22.5",
     "@tiptap/extension-table": "^3.22.5",
     "@tiptap/extension-table-cell": "^3.22.5",
     "@tiptap/extension-table-header": "^3.22.5",

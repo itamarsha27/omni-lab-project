@@ -330,7 +330,19 @@ export function LabEditor({ labId, initialTitle, initialContent }: LabEditorProp
       <div className="flex flex-1 overflow-hidden">
         <SlideFilmstrip slides={slides} selectedIndex={state.selectedIndex} dispatch={dispatch} />
 
-        <div className="flex flex-1 items-center justify-center overflow-hidden bg-[#e8e8e8] p-6">
+        {/* Clicking the gray padding around the canvas (or the right aside)
+            deselects whatever element is currently selected. The
+            `e.target === e.currentTarget` guard limits the handler to direct
+            clicks on the wrapper itself — clicks bubbling up from the canvas
+            are ignored so canvas-internal click logic keeps working. */}
+        <div
+          className="flex flex-1 items-center justify-center overflow-hidden bg-[#e8e8e8] p-6"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              dispatch({ type: "SELECT_ELEMENT", id: null });
+            }
+          }}
+        >
           <div className="w-full max-w-5xl shadow-xl">
             <EditorCanvas
               slide={currentSlide}
@@ -343,7 +355,14 @@ export function LabEditor({ labId, initialTitle, initialContent }: LabEditorProp
           </div>
         </div>
 
-        <aside className="w-60 shrink-0 border-l border-gray-200 bg-white" />
+        <aside
+          className="w-60 shrink-0 border-l border-gray-200 bg-white"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              dispatch({ type: "SELECT_ELEMENT", id: null });
+            }
+          }}
+        />
       </div>
 
       {/* Ghost cursor while dragging from toolbar */}

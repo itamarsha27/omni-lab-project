@@ -1,9 +1,19 @@
 @import "tailwindcss";
 
+/* Tailwind v4 theme tokens — point font-sans at the Inter CSS variable
+ * exposed by next/font in layout.tsx. Falls back to the platform sans stack. */
+@theme {
+  --font-sans: var(--font-sans), "Segoe UI", system-ui, -apple-system, Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
 /* ─── Lab editor: TipTap + view-mode text consistency ─────────────────────────
  * Both view-mode (dangerouslySetInnerHTML on .tiptap-content) and edit-mode
  * (TipTap's .ProseMirror) need the same paragraph/heading metrics so the box
  * doesn't appear to "shrink" when entering edit mode.
+ *
+ * NOTE: do NOT set font-family here. The element wrapper provides it inline,
+ * and a rule here would override the user's per-textbox font choice.
  */
 .tiptap-content,
 .ProseMirror {
@@ -11,10 +21,31 @@
   height: 100%;
   width: 100%;
 }
+/* `auto` lets the browser pick a contrasting caret based on the slide's
+ * background — black on white text boxes, white on dark, etc. */
+.ProseMirror {
+  caret-color: auto;
+}
+
+/* TipTap Placeholder extension — show faded prompt text on empty paragraphs.
+ * The pseudo-element also forces a line-box, which fixes the caret-not-
+ * appearing-on-fresh-blank-lines bug (no inline content otherwise = no
+ * line-box for the caret to anchor in). */
+.ProseMirror p.is-empty::before {
+  content: attr(data-placeholder);
+  color: rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
 .tiptap-content p,
 .ProseMirror p {
   margin: 0;
   line-height: 1.25;
+  /* Guarantee a full line-height of vertical space for empty paragraphs so the
+   * caret on a fresh blank line is visible. Matches `line-height: 1.25` above
+   * so the empty line is the same height as a non-empty one. */
+  min-height: 1.25em;
 }
 .tiptap-content h1,
 .ProseMirror h1 {
@@ -30,12 +61,24 @@
   margin: 0;
   line-height: 1.2;
 }
+/* Tailwind v4's preflight strips `list-style` from ul/ol globally. Re-enable
+ * markers inside slide text so the toolbar's bullet/numbered-list buttons
+ * actually produce visible markers. */
 .tiptap-content ul,
-.ProseMirror ul,
+.ProseMirror ul {
+  margin: 0;
+  padding-left: 1.5em;
+  list-style: disc;
+}
 .tiptap-content ol,
 .ProseMirror ol {
   margin: 0;
   padding-left: 1.5em;
+  list-style: decimal;
+}
+.tiptap-content li,
+.ProseMirror li {
+  margin: 0;
 }
 .tiptap-content table,
 .ProseMirror table {
