@@ -17,6 +17,8 @@ import type { EditorAction } from "../lab-editor";
 import { useElementDrag } from "./use-element-drag";
 import { FontSizeControl } from "./font-size-control";
 import { FontFamilyControl } from "./font-family-control";
+import { InlineEquation, type InlineEquationEditRequest } from "./inline-equation-node";
+import { EquationPopup } from "./equation-popup";
 
 interface Props {
   element: TextElementType;
@@ -38,6 +40,7 @@ function FormatToolbarPortal({
   element,
   onChangeFontSize,
   onChangeFontFamily,
+  onInsertInlineEquation,
 }: {
   editor: ReturnType<typeof useEditor>;
   anchorRef: React.RefObject<HTMLDivElement | null>;
@@ -46,6 +49,7 @@ function FormatToolbarPortal({
   element: TextElementType;
   onChangeFontSize: (px: number) => void;
   onChangeFontFamily: (stack: string | undefined) => void;
+  onInsertInlineEquation: () => void;
 }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
@@ -132,6 +136,13 @@ function FormatToolbarPortal({
         >
           ⊞
         </button>
+        <button
+          className={btn(false)}
+          onClick={onInsertInlineEquation}
+          title="Insert inline equation"
+        >
+          <i>fx</i>
+        </button>
       </div>
     </div>,
     document.body
@@ -148,6 +159,21 @@ export function TextElement({
   onContextMenu,
 }: Props) {
   const [isEditing, setIsEditing] = useState(false);
+  // Inline equation popup state. `mode: "insert"` opens an empty math-field at
+  // `pos` (the saved cursor position); `mode: "edit"` opens pre-filled and
+  // replaces the inline equation node at `pos` on commit. anchorRect is a
+  // captured rect (cursor coords for insert, span rect for edit) — fine as a
+  // snapshot because the editor is inert while the popup's backdrop is up.
+  // `fontSize: undefined` means "inherit from the text element"; user picking
+  // an explicit size in the popup sets it to a number, which the inserted /
+  // updated node persists as `data-fontsize`.
+  const [eqPopup, setEqPopup] = useState<{
+    mode: "insert" | "edit";
+    pos: number;
+    initialLatex: string;
+    fontSize: number | undefined;
+    anchorRect: DOMRect;
+  } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const startDrag = useElementDrag({ element, scale, slideIndex, dispatch });
 
@@ -159,6 +185,16 @@ export function TextElement({
   elementRef.current = element;
   const slideIndexRef = useRef(slideIndex);
   slideIndexRef.current = slideIndex;
+  // The editor blurs as soon as the math-field popup steals focus — without
+  // this guard, onBlur would tear down edit mode and unmount the editor while
+  // the popup is still open. Refreshed every render so onBlur (captured once)
+  // always sees the current popup state.
+  const eqPopupRef = useRef(eqPopup);
+  eqPopupRef.current = eqPopup;
+  // Bridge for InlineEquation.configure({ onEditRequest }) — the extension
+  // instance is created once in useEditor, but we want the handler to close
+  // over the latest `editor` and state. Reassigned each render.
+  const onInlineEditRequestRef = useRef<(req: InlineEquationEditRequest) => void>(() => {});
 
   useEffect(() => {
     if (!isSelected) setIsEditing(false);
@@ -194,6 +230,9 @@ export function TextElement({
         emptyEditorClass: "is-editor-empty",
         emptyNodeClass: "is-empty",
       }),
+      InlineEquation.configure({
+        onEditRequest: (req) => onInlineEditRequestRef.current(req),
+      }),
     ],
     content: element.content,
     editorProps: {
@@ -207,6 +246,11 @@ export function TextElement({
       handleScrollToSelection: () => true,
     },
     onBlur: ({ editor }) => {
+      // Inline-equation popup steals focus from the editor; staying in edit
+      // mode keeps the editor mounted so we can insert/replace into it once
+      // the popup commits. Without this, the editor would unmount mid-edit
+      // and the popup would dispatch into nothing.
+      if (eqPopupRef.current) return;
       setIsEditing(false);
       commitContent(editor.getHTML());
     },
@@ -299,6 +343,95 @@ export function TextElement({
     });
   }
 
+  // Open the popup empty at the current cursor position. The fx toolbar button
+  // doesn't steal focus (toolbar wrapper preventDefaults mousedown), so the
+  // editor's selection is intact and we use its head as the insertion point.
+  function handleOpenInsertEquation() {
+    if (!editor) return;
+    const { from } = editor.state.selection;
+    const coords = editor.view.coordsAtPos(from);
+    const anchorRect = new DOMRect(
+      coords.left,
+      coords.top,
+      0,
+      coords.bottom - coords.top,
+    );
+    setEqPopup({
+      mode: "insert",
+      pos: from,
+      initialLatex: "",
+      fontSize: undefined,
+      anchorRect,
+    });
+  }
+
+  // Inline equation NodeView calls this via the configured onEditRequest.
+  // Reassign every render so the latest editor/state is captured.
+  onInlineEditRequestRef.current = (req) => {
+    setEqPopup({
+      mode: "edit",
+      pos: req.pos,
+      initialLatex: req.latex,
+      fontSize: req.fontSize,
+      anchorRect: req.anchorRect,
+    });
+  };
+
+  // Font-size changes in the popup: in edit mode persist to the node live
+  // (matches the standalone equation block's "live UPDATE_ELEMENT" pattern);
+  // in insert mode stage the value in popup state for use on commit.
+  function handlePopupFontSizeChange(px: number) {
+    if (!eqPopup) return;
+    setEqPopup({ ...eqPopup, fontSize: px });
+    if (eqPopup.mode === "edit" && editor) {
+      editor.chain().updateInlineEquation(eqPopup.pos, { fontSize: px }).run();
+    }
+  }
+
+  function handlePopupCommit(latex: string) {
+    if (!editor || !eqPopup) {
+      setEqPopup(null);
+      return;
+    }
+    const trimmed = latex.trim();
+    if (eqPopup.mode === "insert") {
+      if (trimmed) {
+        // chain().focus() restores DOM focus AND restores the editor's stored
+        // selection from before the popup stole focus; insertContent (no pos)
+        // then inserts there, replacing any range selection.
+        // fontSize is only included when the user picked one — otherwise the
+        // node renders inheriting from the surrounding text.
+        const attrs: { latex: string; fontSize?: number } = { latex };
+        if (eqPopup.fontSize !== undefined) attrs.fontSize = eqPopup.fontSize;
+        editor
+          .chain()
+          .focus()
+          .insertContent({ type: "inlineEquation", attrs })
+          .run();
+      } else {
+        editor.commands.focus();
+      }
+    } else {
+      if (trimmed) {
+        editor.chain().focus().updateInlineEquation(eqPopup.pos, { latex }).run();
+      } else {
+        // Cleared to empty — remove the node so we don't leave a stub.
+        editor
+          .chain()
+          .focus()
+          .setNodeSelection(eqPopup.pos)
+          .deleteSelection()
+          .run();
+      }
+    }
+    setEqPopup(null);
+  }
+
+  function handlePopupCancel() {
+    setEqPopup(null);
+    editor?.commands.focus();
+  }
+
   return (
     <div
       ref={rootRef}
@@ -336,6 +469,23 @@ export function TextElement({
           element={element}
           onChangeFontSize={handleChangeFontSize}
           onChangeFontFamily={handleChangeFontFamily}
+          onInsertInlineEquation={handleOpenInsertEquation}
+        />
+      )}
+
+      {eqPopup && (
+        <EquationPopup
+          key={`${eqPopup.mode}-${eqPopup.pos}`}
+          initialLatex={eqPopup.initialLatex}
+          getAnchorRect={() => eqPopup.anchorRect}
+          // When the node has no explicit fontSize, display the inherited
+          // size from the surrounding text element (its fontSize, or the
+          // text-element default if unset). Picking a value in the control
+          // upgrades it to an explicit per-node fontSize.
+          fontSize={eqPopup.fontSize ?? element.fontSize ?? BASE_FONT_PX}
+          onFontSizeChange={handlePopupFontSizeChange}
+          onCommit={handlePopupCommit}
+          onCancel={handlePopupCancel}
         />
       )}
     </div>

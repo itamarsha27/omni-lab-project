@@ -235,8 +235,8 @@ Long arc — five iterations to land on the right behavior.
 - **The thumbnail tradeoff is not solvable without compromise.** Either accurate-but-tiny or readable-but-distorted. We picked accurate. If the user later wants both, the fix is bigger thumbnails (e.g., a separate "full-size preview" panel), not changing the rendering math.
 
 ### What's next
-- Decision pending: when to start **M2.3 (Quiz blocks)**. The next session.
-- Smaller pending ask: **inline equation inside a text box** (a TipTap inline node + the existing equation popup). User asked, agreed to skip for now, queued for a dedicated pass.
+- **M2.3 (Quiz blocks)** — the next milestone.
+- Inline equation inside text boxes (queued, now done in Day 4).
 
 ### Stats
 - Files created today: 2 (`elements/font-size-control.tsx`, `elements/font-family-control.tsx`).
@@ -244,3 +244,72 @@ Long arc — five iterations to land on the right behavior.
 - New dependency: `@tiptap/extension-placeholder`.
 - Decisions reversed: **inline formatting (bold/italic/etc.) is now selection-based**, not whole-box — only L/C/R alignment remains whole-box.
 - Decisions added: 11-font preset list (Inter default + 10 Word fonts including Calibri & David); horizontal snap-to-grid; auto-grow textbox vertical; click-outside-canvas deselects.
+
+---
+
+## Day 4 — 2026-05-11
+
+### Theme of the day
+M2.2b — inline equations inside text boxes + equation font-size polish. Also locked the right-panel sidebar product decision (Q20b) before touching any code.
+
+### Product decision locked
+
+**Q20b — Right-panel sidebar as contextual properties surface**
+The right panel will be a properties sidebar that changes based on what's selected: nothing → slide properties; quiz element → question editor; equation element → equation properties; text element → font controls. Popups remain only for insert-and-confirm actions. This shapes M2.3 (quiz properties go in the sidebar, not a popup). Documented in PROJECT_CONTEXT.md.
+
+### Features built
+
+**Shared `EquationPopup` component** (`elements/equation-popup.tsx` — new file)
+- Extracted the MathLive popup from `equation-element.tsx` into a standalone component so both the standalone equation element and the text element's inline equation feature can reuse it without duplication.
+- Props: `initialLatex`, `getAnchorRect: () => DOMRect | null`, optional `fontSize` / `onFontSizeChange`, optional `onDraftChange`, `onCommit`, `onCancel`.
+- Key pattern: `getAnchorRect` is a callback (not a snapshot `DOMRect`) so the popup's scroll/resize listeners always see the latest position. Bridged via a ref (`getAnchorRectRef`) so listeners don't get re-registered on every parent re-render.
+- Font-size row only renders when `fontSize !== undefined && onFontSizeChange` — optional for callers that don't need it.
+- QUICK_INSERTS template array (15 templates) lives here.
+
+**Floating font-size toolbar for standalone equation** (`EquationToolbarPortal` inside `equation-element.tsx`)
+- When an equation box is selected but not being edited, a small floating toolbar appears above it containing only a `FontSizeControl` (size="sm").
+- Portalled to `document.body` (escapes the CSS-scaled canvas coordinate space). Tracks element position via `useLayoutEffect` with scroll/resize listeners + element coords as deps (so drag-repositioning updates it too).
+- Rendered as `{isSelected && !isEditing && <EquationToolbarPortal />}`.
+
+**Inline equation TipTap node** (`elements/inline-equation-node.tsx` — new file)
+- Custom TipTap `Node` extension: `group: "inline"`, `inline: true`, `atom: true`, `selectable: true`.
+- Attributes: `latex` (string, default `""`) + `fontSize` (number|null, default `null` — null means inherit from surrounding text via KaTeX's em-based sizing; a number applies an explicit `font-size: Npx` inline style).
+- `renderHTML`: returns a real DOM `<span data-type="inline-equation" data-latex="..." [data-fontsize="..."]>` with embedded KaTeX HTML inside. View-mode (dangerouslySetInnerHTML of saved content) renders equations without a re-render pass. Round-trip: `parseHTML` re-reads from `data-latex` / `data-fontsize` and ignores the embedded HTML.
+- `addCommands`: `setInlineEquation(attrs)` — inserts at cursor; `updateInlineEquation(pos, attrs)` — updates an existing node by position.
+- NodeView (`InlineEquationView`): renders KaTeX with indigo selected highlight (border + background). Click fires `onEditRequest` callback via the extension's live options object (avoids needing to thread props through TipTap closures).
+- `declare module "@tiptap/core"` augmentation adds `setInlineEquation` / `updateInlineEquation` to TipTap's `Commands` type.
+
+**Text element inline equation integration** (`text-element.tsx`)
+- "fx" italic button added to `FormatToolbarPortal` — inserts a new inline equation at the cursor position.
+- `eqPopup` state: `{ mode: "insert" | "edit", pos, initialLatex, fontSize, anchorRect } | null`.
+- Insert mode: captures cursor coords via `editor.view.coordsAtPos(from)`; opens popup with `fontSize: undefined` (inherit). Commit → `insertContent({ type: "inlineEquation", attrs: { latex, [fontSize?] } })` — fontSize only included if explicitly changed.
+- Edit mode: triggered by clicking an existing inline equation (`onEditRequest` from the NodeView). Commit → `updateInlineEquation(pos, { latex })` (and separately the font-size if changed); delete node if latex is empty after edit.
+- `onBlur` guard: if `eqPopupRef.current` is truthy (popup open), skip `setIsEditing(false)` so the TipTap editor stays mounted while the math-field popup has focus.
+- `onInlineEditRequestRef` ref bridge: the handler is reassigned each render so the NodeView's click callback always sees the current state, without needing to re-configure the TipTap extension on every state change.
+- Font-size semantics: insert popup gets `fontSize={eqPopup.fontSize ?? element.fontSize ?? BASE_FONT_PX}`; edit popup live-updates the node's `fontSize` attr as the user changes the control (mirrors the standalone equation pattern).
+
+**Hover style for inline equations** (`globals.css`)
+- `.ProseMirror .inline-equation:hover { background-color: rgba(99, 102, 241, 0.08); }` — subtle indigo tint on hover so they're recognizable as clickable; scoped to editor-only (not view-mode `.tiptap-content`).
+
+### Bug fixed
+
+**`@tiptap/core` not found / TypeScript augmentation failing**
+- `@tiptap/core` was only a transitive dependency (pulled in by `@tiptap/react`, `@tiptap/starter-kit`, etc.). pnpm's strict hoisting means transitively-installed packages can't be imported directly from `apps/web`.
+- Adding `"@tiptap/core": "^3.22.5"` to `apps/web/package.json` + `pnpm install` resolved it.
+- This also fixed 12 cascading TypeScript errors: `declare module "@tiptap/core"` augmentation was silently failing (no module to augment), causing `setInlineEquation` / `updateInlineEquation` to not appear on `ChainedCommands`, and `getPos()` to be typed as `any`.
+- **Lesson:** in a pnpm workspace with strict hoisting, every package you import directly must be in your own `package.json` `dependencies` — transitive availability is an implementation detail, not a guarantee.
+
+### Lessons learned
+- **TipTap extension options are live objects.** The NodeView doesn't receive prop updates when TipTap re-renders. To call the *current* handler, reach the extension's options via `editor.extensionManager.extensions.find(x => x.name === "inlineEquation")?.options` — those are mutable and can be updated after init.
+- **`getPos()` in TipTap NodeViewProps can return `undefined`** if the node was unmounted between the click event being enqueued and the handler running. Always guard: `const pos = getPos?.(); if (typeof pos !== "number") return;`.
+- **`renderHTML` can return a DOM element, not just a tag spec.** For nodes that need embedded HTML (like KaTeX), returning a real `HTMLElement` from `renderHTML` lets you set `innerHTML` directly. TipTap serializes it correctly. `parseHTML` on round-trip should read from data attributes and ignore the inner HTML to avoid double-rendering.
+- **Ref bridges for stale TipTap closures.** `useEditor`'s callbacks (onBlur, etc.) are captured once and don't re-close over state updates. Store "current" state in a `useRef` and reassign it each render — the callback reads `.current` so it always sees the latest value.
+
+### What's next
+- **M2.3 — Quiz blocks.** All 6 question types, sidebar-based properties editing (Q20b), max-one-quiz-per-slide constraint.
+
+### Stats
+- Files created: 2 (`elements/equation-popup.tsx`, `elements/inline-equation-node.tsx`).
+- Files modified: `elements/equation-element.tsx`, `elements/text-element.tsx`, `globals.css`, `apps/web/package.json`.
+- New dependency: `@tiptap/core` (explicit direct dep).
+- Decisions locked: Q20b (right-panel sidebar as contextual properties surface).

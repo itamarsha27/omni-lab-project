@@ -95,3 +95,11 @@
   border: 1px solid #d1d5db;
   padding: 4px 8px;
 }
+
+/* Inline equations inside text boxes. The wrapper span carries the visual
+ * affordance; inner KaTeX HTML is unaffected. Hover only applies inside the
+ * editor (where they're clickable) — view-mode .tiptap-content also has them
+ * but they're not interactive there. */
+.ProseMirror .inline-equation:hover {
+  background-color: rgba(99, 102, 241, 0.08);
+}
