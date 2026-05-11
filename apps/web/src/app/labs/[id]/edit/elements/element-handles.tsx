@@ -119,6 +119,14 @@ export function ElementHandles({ element, scale, slideIndex, dispatch }: Props) 
   const sh = height * scale;
   const half = FRAME_PX / 2;
 
+  const DEL_SIZE = 24;
+  const DEL_GAP = 6;
+  // If there isn't room above the frame, tuck the button just inside the
+  // top-right corner so it stays visible for elements near the top edge.
+  const delAbove = sy >= DEL_SIZE + DEL_GAP;
+  const delTop = delAbove ? sy - DEL_SIZE - DEL_GAP : sy + DEL_GAP;
+  const delLeft = sx + sw - DEL_SIZE - (delAbove ? 0 : DEL_GAP);
+
   return (
     <>
       {/* Selection outline — visual only; pointer events go to the frame strips below */}
@@ -159,6 +167,58 @@ export function ElementHandles({ element, scale, slideIndex, dispatch }: Props) 
           }}
         />
       ))}
+
+      {/* Delete button — top-right of selection */}
+      <button
+        type="button"
+        title="Delete"
+        aria-label="Delete"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dispatch({ type: "DELETE_ELEMENT", slideIndex, elementId: element.id });
+        }}
+        style={{
+          position: "absolute",
+          left: delLeft,
+          top: delTop,
+          width: DEL_SIZE,
+          height: DEL_SIZE,
+          padding: 0,
+          border: "1px solid #e5e7eb",
+          borderRadius: 6,
+          backgroundColor: "white",
+          color: "#dc2626",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
+          zIndex: 102,
+        }}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <path d="M3 6h18" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+          <line x1="10" y1="11" x2="10" y2="17" />
+          <line x1="14" y1="11" x2="14" y2="17" />
+        </svg>
+      </button>
 
       {/* 8 resize handles */}
       {handles.map(([hx, hy, cursor, dir]) => (
