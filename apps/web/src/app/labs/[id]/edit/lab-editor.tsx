@@ -6,6 +6,8 @@ import {
   createBlankSlide,
   createTextElement,
   createEquationElement,
+  createImageElement,
+  createVideoElement,
   createQuizElement,
   parseLabContent,
   CANVAS_WIDTH,
@@ -17,6 +19,8 @@ import { SlideFilmstrip } from "./slide-filmstrip";
 import { EditorCanvas } from "./editor-canvas";
 import { ElementToolbar, type PaletteType } from "./elements/element-toolbar";
 import { QuizSidebar } from "./elements/quiz-sidebar";
+import { ImageSidebar } from "./elements/image-sidebar";
+import { VideoSidebar } from "./elements/video-sidebar";
 
 // ============================================================================
 // State & reducer
@@ -197,15 +201,33 @@ interface PaletteDrag {
 }
 
 function paletteFactory(type: PaletteType) {
-  if (type === "text") return createTextElement;
-  if (type === "equation") return createEquationElement;
-  return createQuizElement;
+  switch (type) {
+    case "text":
+      return createTextElement;
+    case "equation":
+      return createEquationElement;
+    case "image":
+      return createImageElement;
+    case "video":
+      return createVideoElement;
+    case "quiz":
+      return createQuizElement;
+  }
 }
 
 function paletteGhostLabel(type: PaletteType): string {
-  if (type === "text") return "T  Text";
-  if (type === "equation") return "∑  Equation";
-  return "?  Quiz";
+  switch (type) {
+    case "text":
+      return "T  Text";
+    case "equation":
+      return "∑  Equation";
+    case "image":
+      return "🖼  Image";
+    case "video":
+      return "▶  Video";
+    case "quiz":
+      return "?  Quiz";
+  }
 }
 
 export function LabEditor({ labId, initialTitle, initialContent }: LabEditorProps) {
@@ -400,6 +422,20 @@ export function LabEditor({ labId, initialTitle, initialContent }: LabEditorProp
         >
           {selectedEl?.type === "quiz" && (
             <QuizSidebar
+              element={selectedEl}
+              slideIndex={state.selectedIndex}
+              dispatch={dispatch}
+            />
+          )}
+          {selectedEl?.type === "image" && (
+            <ImageSidebar
+              element={selectedEl}
+              slideIndex={state.selectedIndex}
+              dispatch={dispatch}
+            />
+          )}
+          {selectedEl?.type === "video" && (
+            <VideoSidebar
               element={selectedEl}
               slideIndex={state.selectedIndex}
               dispatch={dispatch}

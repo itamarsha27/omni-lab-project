@@ -136,3 +136,99 @@ M2 build order step 4. Covers Q7 (images) and Q8 (videos).
 - Types removed: `EquationFillQuestion` (and from `QuizQuestion` union).
 - Types changed: `NumericQuestion.correctValue: number → string`.
 - Decisions: equation-fill kind cut; numeric absorbs symbolic answers; True/False two-color highlight.
+
+---
+
+## Day 2 — 2026-05-13
+
+### Theme of the day
+M2.4 — Image + Video blocks (URL-embed only). Built the full image and video authoring pipeline: factories, canvas renderers, sidebars, toolbar buttons, and filmstrip thumbnails. S3 upload deferred (bucket not yet provisioned).
+
+---
+
+### What we built — M2.4 Image + Video blocks
+
+**Factory** (`packages/lab-content/src/index.ts`)
+- `createImageElement()`: 800×500 px default, empty `src` and `alt`.
+- `createVideoElement()`: 800×500 px default, empty `url`.
+- Both types already existed in `types.ts`; only the factories were missing.
+
+**`elements/video-url.ts`** — pure URL parser (no side effects)
+- `parseVideoUrl(url)`: returns `{ platform, id }` or `null`.
+  - YouTube: `youtube.com/watch?v=ID`, `youtu.be/ID`, `/embed/ID`, `/shorts/ID`, `/live/ID`, `/v/ID`, `-nocookie.com/` variants.
+  - Vimeo: `vimeo.com/ID` (numeric) and `player.vimeo.com/video/ID`.
+- `videoThumbnailUrl(parsed)`: returns YouTube `hqdefault.jpg` URL; returns `null` for Vimeo (no cheap API-free thumbnail URL exists).
+
+**`elements/image-element.tsx`** — canvas renderer
+- `<img>` with `objectFit: contain` and `draggable={false}` (suppresses browser's native image drag so our custom drag hook stays in control).
+- Empty-state placeholder: dashed box + 🖼 emoji + "Paste an image URL in the right sidebar."
+- Load-error state: `onError` sets `loadError = true` → placeholder switches message to "Image failed to load — check the URL in the sidebar."
+
+**`elements/video-element.tsx`** — canvas renderer
+- No `<iframe>` in the editor — active iframes capture all mouse events and break canvas drag/select. Real playback is deferred to preview/session mode (M3).
+- For YouTube: renders the `hqdefault.jpg` thumbnail as a background image.
+- For Vimeo (and any parsed-but-no-thumb case): renders a solid `#0b0f19` background (dark placeholder).
+- Over the background: a translucent circular play button (CSS-only right-pointing triangle inside a dark circle) + a small platform badge (bottom-left).
+- Three empty/error states: no URL → "Paste a YouTube or Vimeo URL"; URL present but unrecognised → "Not a recognized YouTube or Vimeo URL."
+
+**`elements/image-sidebar.tsx`** — contextual properties editor
+- URL input (`type="url"`) + note that S3 upload comes in a later pass.
+- Alt text input (accessibility, also used in the `ImageElement.alt` field already in the type).
+
+**`elements/video-sidebar.tsx`** — contextual properties editor
+- URL input with live parse feedback: green "youtube · dQw4w9WgXcQ" on success; red "Not a recognized YouTube or Vimeo URL." on failure; nothing shown for an empty field.
+- Note reminding teacher that playback is editor-preview/live-session only.
+
+**`element-toolbar.tsx`** extended
+- `PaletteType` extended: `"text" | "equation" | "image" | "video" | "quiz"`.
+- Two new buttons between ∑ and `?`, each with an inline SVG glyph:
+  - Image: framed-picture icon (rectangle + sun circle + mountain path).
+  - Video: rectangle + play triangle.
+  - SVGs use `currentColor` so they automatically pick up the active / disabled / hover text-color classes already used by T / ∑ / ?.
+
+**`lab-editor.tsx`** extended
+- `paletteFactory` and `paletteGhostLabel` converted from if-chains to exhaustive switches (TypeScript will now error if a new `PaletteType` variant is added without handling both).
+- Ghost labels: "🖼  Image" and "▶  Video".
+- `createImageElement` and `createVideoElement` imported and wired into the factory map.
+- `<ImageSidebar>` and `<VideoSidebar>` rendered in the right `<aside>` via `selectedEl?.type === "image"` / `"video"` branches.
+
+**`editor-canvas.tsx`**: `case "image"` and `case "video"` added to `renderElement` switch.
+
+**`slide-thumbnail.tsx`**:
+- Image branch: renders the actual `<img>` at thumbnail scale (empty `src` → dashed grey placeholder).
+- Video branch: renders the YouTube thumbnail (or dark background for Vimeo) + a tiny CSS play triangle centered over it so video blocks are visually identifiable at filmstrip scale.
+
+---
+
+### Design decisions made during build
+
+**No iframe in the editor** — confirmed. Iframes receive mouse events before the parent document, which breaks the canvas's drag-start and context-menu. Static thumbnail + play overlay is the standard pattern for all video-embedding editors (Notion, Slides, etc.) for exactly this reason.
+
+**Vimeo thumbnails not fetched** — the Vimeo thumbnail API requires either an authenticated request or an oEmbed call. Both are too heavy for the editor preview. The dark `#0b0f19` placeholder is a deliberate choice, not a gap.
+
+**S3 upload deferred** — `ImageElement.assetId?` field already reserved in the data model. When the S3 bucket is provisioned, add a presigned-URL server action and an "Upload from device" button in `ImageSidebar`.
+
+---
+
+### What's next — M2.5 — Freehand Drawing + Shapes
+
+**Open question before starting**: Should the drawing tool be a canvas-wide "paint mode" (click to enter, everything you do is a stroke) or a drag-from-toolbar element (same pattern as text/equation/image)? Drag-from-toolbar plays better with undo/redo and the existing element model — leaning that way. Confirm before coding.
+
+**Freehand drawing** (`DrawingElement` type exists, `strokes: DrawingStroke[]`):
+- Pointer events: `pointerdown` starts stroke, `pointermove` appends, `pointerup` commits.
+- Render: SVG `<polyline>` per stroke (simpler coordinate math than `<canvas>`).
+- Undo: each committed stroke = 1 `SNAPSHOT` step.
+- Sidebar: color picker + stroke-width picker.
+
+**Shapes** (`ShapeElement` type exists: rectangle, circle, triangle, arrow, line):
+- Drag-from-toolbar to insert; resize handles already work.
+- Render as SVG.
+- Sidebar: fill color, stroke color, stroke width.
+
+---
+
+### Stats
+- Files created: `elements/image-element.tsx`, `elements/image-sidebar.tsx`, `elements/video-element.tsx`, `elements/video-sidebar.tsx`, `elements/video-url.ts`.
+- Files modified: `packages/lab-content/src/index.ts`, `elements/element-toolbar.tsx`, `lab-editor.tsx`, `editor-canvas.tsx`, `slide-thumbnail.tsx`, `docs/PROJECT_CONTEXT.md`, `README.md`.
+- Types changed: `PaletteType` extended with `"image"` and `"video"`.
+- Decisions: no iframe in editor canvas; Vimeo thumbnail not fetched; S3 upload deferred.

@@ -170,13 +170,20 @@ omni-lab-project/
 - `[id]/edit/lab-editor-actions.tsx` — client: editable title + File dropdown menu
 - `[id]/edit/lab-editor-actions.tsx` — File menu: Rename, Publish (disabled), Initiate (disabled), Delete
 
-**`apps/web/src/app/labs/[id]/edit/elements/` (M2.2 + M2.2 polish + M2.2b inline eq):**
+**`apps/web/src/app/labs/[id]/edit/elements/` (M2.2 + M2.2 polish + M2.2b inline eq + M2.3 quiz + M2.4 image/video):**
 - `text-element.tsx` — TipTap-based rich text element (StarterKit + Color + TextStyle + TextAlign + Tables + Placeholder + InlineEquation node); hosts the inline-equation popup (insert + edit modes)
 - `equation-element.tsx` — KaTeX view + floating font-size toolbar on select + MathLive popup (via `EquationPopup`)
 - `equation-popup.tsx` — **shared** MathLive popup component; used by both `equation-element.tsx` and `text-element.tsx`. Props: `initialLatex`, `getAnchorRect: () => DOMRect | null`, optional `fontSize`/`onFontSizeChange`, optional `onDraftChange`, `onCommit`, `onCancel`
 - `inline-equation-node.tsx` — TipTap `Node` extension for inline `$...$`-style equations inside text boxes. Attrs: `latex` (string) + `fontSize` (number|null — null = inherit via KaTeX em-sizing; number = explicit override). `renderHTML` embeds KaTeX HTML for view-mode; `parseHTML` reads `data-latex` / `data-fontsize`. Commands: `setInlineEquation` / `updateInlineEquation(pos, attrs)`. NodeView: click → edit request callback.
+- `quiz-element.tsx` — view-only quiz canvas renderer; switches on `question.kind`. `TFButton` tone prop for green/red coloring; numeric coerces legacy `number` → `string` defensively.
+- `quiz-sidebar.tsx` — contextual properties editor for quiz blocks; 5 kind-specific sub-editors; shown in right `<aside>` when quiz element selected.
+- `image-element.tsx` — `<img>` renderer with drag, `objectFit: contain`, empty-state and load-error placeholders.
+- `image-sidebar.tsx` — URL input + alt text; S3 upload path noted as follow-up.
+- `video-element.tsx` — static thumbnail + play button overlay + platform badge. No iframe in editor. Dark placeholder for Vimeo / unrecognised URLs.
+- `video-sidebar.tsx` — URL input with live green/red parse status.
+- `video-url.ts` — `parseVideoUrl()` + `videoThumbnailUrl()` (YouTube + Vimeo).
 - `element-handles.tsx` — 8 resize handles + 4 invisible drag-frame strips around the selection outline
-- `element-toolbar.tsx` — `T` / `∑` palette buttons (drag-from-button to canvas)
+- `element-toolbar.tsx` — `T` / `∑` / image / video / `?` palette buttons; image+video use inline SVG glyphs; `quizDisabled` prop
 - `use-element-drag.ts` — shared drag hook with horizontal snap to slide left / center / right
 - `font-size-control.tsx` — shared `−` / numeric input / ▾ presets / `+` Word-style controller (used in equation popup AND text format toolbar)
 - `font-family-control.tsx` — 11-font dropdown (Inter default + Calibri / David / etc., previewed in their own font)
@@ -228,7 +235,7 @@ Defense-in-depth uniqueness: the `Answer` and `Participant` constraints exist bo
 - **M2.1** — Canvas Foundation. `packages/lab-content/` workspace package: full v1 TypeScript content model (11 element types, 6 quiz question kinds), `createDefaultSlide()` / `createBlankSlide()` / `parseLabContent()` helpers, `CANVAS_WIDTH=1920` / `CANVAS_HEIGHT=1080` constants. Editor layout: left filmstrip (dnd-kit drag-to-reorder) + 16:9 scaled canvas (ResizeObserver + CSS `position:absolute` inner div) + right panel placeholder. Slide ops: add, delete, duplicate, reorder, select. Autosave: debounced 2 s + immediate on structural changes + Save button + unsaved dot indicator. Undo/redo: 20-step `useReducer` history stack. Keyboard: Ctrl+Z/Y/Shift+Z, Ctrl+S, Delete/Backspace (guarded from inputs). `createLab` seeded with first Title+Content slide. `getOrCreateUser()` helper for lazy Clerk→DB sync (fixes webhook-miss loop).
 - **M2.2** — Text + Equation blocks. Reducer extended with element actions + `SNAPSHOT`/`MOVE_ELEMENT_LIVE` pattern (one drag = one undo step). **Drag-from-toolbar**: T / ∑ buttons act as drag handles — mousedown on the button → ghost tag follows cursor (`createPortal` to body) → drop on canvas creates element centered on cursor at default size. **Custom resize handles** (`elements/element-handles.tsx`): 8 corner/edge handles + selection outline rendered outside the scaled canvas div in container-relative px (`element.x * scale`). react-moveable was tried first and abandoned — it's fragile inside CSS-scaled containers. **Text element**: TipTap (StarterKit + Color + TextStyle + TextAlign + Tables, `immediatelyRender:false`); FormatToolbar lives in a portal at native screen size; base `font-size:48` on the wrapper so view-mode HTML and `.ProseMirror` render identically. **Equation element**: KaTeX view mode + popup MathLive editor in a portal (Word-style — quick-insert toolbar with 15 templates, live preview, virtual keyboard via `math-virtual-keyboard-policy="manual"`). `EquationElement.fontSize?: number`; box can be widened to fit longer equations (no auto-scaling). **Filmstrip thumbnails** render elements (text + KaTeX + placeholder boxes). **Right-click menu** on elements: Bring to front / Send to back. Delete/Backspace deletes element only (slide deletion via filmstrip context menu). Editor background `#e8e8e8` for slide contrast. `e.preventDefault()` on every custom-drag mousedown — without it Chromium on Windows hijacks the gesture as native text-selection. Packages: `react-moveable` (installed but unused), `@tiptap/react` + starter-kit + 5 extensions, `katex`, `mathlive`.
 - **M2.2 polish** — Day 3, 2026-05-07. Big bug-fix + UX-quality pass before greenlighting M2.3. **Inline formatting flipped to selection-based** (Q15-extended reversed): bold/italic/H1/H2/P/lists/color/table act on selection or current block; only L/C/R alignment is whole-box. **Word-style font-size controller** (`font-size-control.tsx`, shared component): `−` / numeric input / `▾` Word presets / `+`, used in equation popup AND text format toolbar. UI label is canvas-px ÷ 2 (typing 42 stores 84). **Font-family picker** (`font-family-control.tsx`): dropdown of 11 fonts (Default Inter + Calibri / Cambria / David / Arial / Times New Roman / Georgia / Verdana / Tahoma / Courier New / Comic Sans MS), each preview-rendered in its own font, stored as a full font-family stack with metric-compatible Linux fallbacks (Carlito for Calibri, Frank Ruehl CLM for David, etc.). **Inter loaded globally via `next/font/google`** as `--font-sans`, wired into Tailwind v4 `@theme`. **`TextElement.fontSize?` and `TextElement.fontFamily?`** added to the type. Equation default `fontSize` aligned 64 → 48 to match text default. **Auto-grow textbox vertical**: TipTap `update` event measures `scrollHeight + 8`, dispatches `MOVE_ELEMENT_LIVE` (no history pollution); final height lands in history on blur via refs that thread the latest element through useEditor's stale-once closure. **Drag-while-editing**: 4 invisible 10 px draggable strips along the selection border (in `element-handles.tsx`) hooked into `useElementDrag`. **Horizontal snap-to-grid**: drag snaps element's left edge / right edge / center to slide left / right / horizontal-center within 24 canvas-px. **Click outside canvas deselects**: `onMouseDown` on the gray padding wrapper + right aside, gated by `e.target === e.currentTarget`. **Caret-on-empty-line fix**: installed `@tiptap/extension-placeholder`; `is-empty::before` pseudo-content gives empty paragraphs a real line-box so the caret has somewhere to anchor. Placeholder text is `"|"` only when `editor.isEmpty` (fresh text box); empty paragraphs created mid-doc emit `""` so the line-box exists silently. `caret-color: auto` for native contrast. `min-height: 1.25em` on `<p>` matches `line-height` so empty lines reserve full vertical space. **ProseMirror auto-scroll suppression**: `editorProps.handleScrollToSelection: () => true` + `focus("end", { scrollIntoView: false })` — scaled-canvas + `overflow:hidden` ancestors made every transaction's auto-scroll mis-calculate, shifting visible text out of the box. **Tailwind v4 preflight rescues**: explicit `list-style: disc` / `list-style: decimal` for tiptap lists; explicit removal of a global `font-family: var(--font-sans)` rule that was overriding inline `fontFamily`. **Equation polish**: popup pre-fills with current LaTeX via `customElements.whenDefined("math-field").then(...)` (race-fix that also kills the `Cannot read properties of undefined (reading 'options')` error); popup flips above when too close to bottom of viewport; format toolbar tracks the box during drag (element passed as `useLayoutEffect` dep). **Thumbnails**: settled on true 1:1 mirror of editor (no font boost), accepting tiny default text in exchange for accuracy — text uses `el.fontSize` + `el.fontFamily`, equations use the same flex-centered wrapper as the editor. `THUMB_W = 220`, aside `w-60`. New deps: `@tiptap/extension-placeholder`.
-- **M2.2b — Inline equations + equation toolbar** — Day 4, 2026-05-11. **Product decision locked (Q20b)**: the right panel is a contextual properties sidebar. **Shared `EquationPopup`** extracted from `equation-element.tsx`; uses `getAnchorRect: () => DOMRect | null` callback + ref bridge so scroll/resize listeners always call the latest getter. **Floating font-size toolbar for standalone equation** (`EquationToolbarPortal`): portalled to `document.body`, appears on element select (not while editing), disappears when edit popup opens; contains only `FontSizeControl size="sm"`. **Inline equation TipTap node** (`inline-equation-node.tsx`): `group:"inline"`, `atom:true`, `selectable:true`. Attrs: `latex` (string) + `fontSize` (number|null — null = inherit via KaTeX em-sizing, number = explicit px override). `renderHTML` returns a real DOM `<span>` with embedded KaTeX HTML (`data-latex` / `data-fontsize` for round-trip). `parseHTML` reads those attrs. Commands: `setInlineEquation` / `updateInlineEquation(pos, attrs)`. NodeView: click → `onEditRequest` callback via extension live options; indigo selected highlight. **Text element integration**: "fx" button in format toolbar inserts at cursor; clicking existing node opens edit popup; `onBlur` guard prevents editor unmount while math-field has focus; `onInlineEditRequestRef` ref bridge avoids stale TipTap closures. On commit: insert → `insertContent`; edit → `updateInlineEquation` (delete node if latex empty). **TypeScript fix**: `@tiptap/core` added as explicit direct dep (was transitive-only — pnpm strict mode broke `declare module "@tiptap/core"` augmentation). New files: `equation-popup.tsx`, `inline-equation-node.tsx`.
+- **M2.2b — Inline equations + equation toolbar** — 2026-05-11. **Product decision locked (Q20b)**: the right panel is a contextual properties sidebar. **Shared `EquationPopup`** extracted from `equation-element.tsx`; uses `getAnchorRect: () => DOMRect | null` callback + ref bridge so scroll/resize listeners always call the latest getter. **Floating font-size toolbar for standalone equation** (`EquationToolbarPortal`): portalled to `document.body`, appears on element select (not while editing), disappears when edit popup opens; contains only `FontSizeControl size="sm"`. **Inline equation TipTap node** (`inline-equation-node.tsx`): `group:"inline"`, `atom:true`, `selectable:true`. Attrs: `latex` (string) + `fontSize` (number|null — null = inherit via KaTeX em-sizing, number = explicit px override). `renderHTML` returns a real DOM `<span>` with embedded KaTeX HTML (`data-latex` / `data-fontsize` for round-trip). `parseHTML` reads those attrs. Commands: `setInlineEquation` / `updateInlineEquation(pos, attrs)`. NodeView: click → `onEditRequest` callback via extension live options; indigo selected highlight. **Text element integration**: "fx" button in format toolbar inserts at cursor; clicking existing node opens edit popup; `onBlur` guard prevents editor unmount while math-field has focus; `onInlineEditRequestRef` ref bridge avoids stale TipTap closures. On commit: insert → `insertContent`; edit → `updateInlineEquation` (delete node if latex empty). **TypeScript fix**: `@tiptap/core` added as explicit direct dep (was transitive-only — pnpm strict mode broke `declare module "@tiptap/core"` augmentation). New files: `equation-popup.tsx`, `inline-equation-node.tsx`.
 
 ### Open follow-ups
 
@@ -239,26 +246,36 @@ Defense-in-depth uniqueness: the `Answer` and `Participant` constraints exist bo
 
 ### Next
 
-**M2.4 — Image + Video blocks (START HERE)**
+**M2.5 — Freehand Drawing + Shapes (START HERE)**
 
-Step 4 of the locked M2 build order. `ImageElement` and `VideoElement` types already exist in `packages/lab-content/src/types.ts`; what's missing is the factory, renderer, toolbar button, and sidebar wiring.
+Step 5 of the locked M2 build order.
 
-**Image blocks (Q7):**
-- Two insertion paths: URL embed (simpler, build first) and upload from device via S3 presigned URL (requires AWS bucket + CloudFront + presigned-URL server action — check whether S3 is provisioned before starting this path).
-- Renderer: `<img src alt>` inside the standard absolute-positioned box. Existing resize handles already work.
-- Sidebar (Q20b): image src/URL input + alt text field.
-- Thumbnail: `<img>` at thumbnail scale.
+**Freehand drawing (Q13):** Teachers can sketch freely on the canvas — diagrams, annotations, free-body diagrams, arrows. `DrawingElement` type already exists in `types.ts` with `strokes: DrawingStroke[]` (each stroke is an array of `[x, y]` points + color + width). Build in this order:
+1. A drawing mode toggle (pencil icon in the toolbar, or a mode button near the canvas).
+2. On canvas: `pointerdown` starts a new stroke, `pointermove` appends points, `pointerup` commits. Store at canvas-px resolution (1920×1080 space).
+3. Render with `<canvas>` or SVG `<polyline>` elements overlaid on the slide — SVG is simpler for the coordinate math.
+4. Undo/redo: each committed stroke is one step (use the existing `SNAPSHOT` + action pattern).
+5. Color picker + stroke-width picker in the sidebar or a small floating toolbar.
 
-**Video embeds (Q8):**
-- YouTube and Vimeo URLs. Extract video ID → render `<iframe>`.
-- In the editor canvas: static YouTube thumbnail image (`https://img.youtube.com/vi/{id}/0.jpg`) + play-icon overlay — keeps the canvas drag/select working (an active `<iframe>` captures mouse events and breaks everything).
-- Sidebar: URL input.
+**Shapes (Q14):** Rectangle, circle, triangle, arrow, line. `ShapeElement` type already exists (`shape: ShapeKind`, `fill`, `stroke`, `strokeWidth`). Render as SVG. Drag-from-toolbar to insert; resize handles already work. Sidebar: fill color, stroke color, stroke width.
 
-**Before starting:** confirm whether S3 is provisioned. If not, ship URL-embed-only for both image and video first; add S3 upload in a follow-up pass.
+**Open question before starting:** Should drawing mode be a canvas-wide "paint mode" (cursor changes, all canvas clicks draw) or should a freehand drawing block be dragged from the toolbar like text/equation? The latter keeps the same mental model as every other element and plays better with undo/redo. Recommend: drag-from-toolbar to create a `DrawingElement` container; drawing happens inside that box.
 
 ---
 
 ### Done (archive)
+
+**M2.4 — Image + Video blocks (complete, 2026-05-13)**
+
+URL-embed-only (S3 upload deferred — bucket not yet provisioned). Both `ImageElement` and `VideoElement` types already existed; built the factory, canvas renderer, sidebar, toolbar, and thumbnail for each.
+
+Key implementation notes:
+- **`video-url.ts`** — pure parser; covers YouTube (watch/short/embed/shorts/live/nocookie) and Vimeo (vimeo.com/ID and player.vimeo.com/video/ID). `videoThumbnailUrl()` returns YouTube `hqdefault.jpg`; Vimeo returns `null` (no cheap API-free thumbnail — falls back to dark placeholder in the editor).
+- **Editor video preview is static (no `<iframe>`)** — active iframes capture mouse events and break canvas drag/select. Real playback happens in preview/session mode (M3). The editor shows: YouTube thumbnail + translucent play button overlay + platform badge.
+- **Empty-state handling** — both elements render a dashed placeholder until a URL is pasted in the sidebar. Image shows a load-error state if the URL 404s or is not an image.
+- **Video sidebar** shows live green/red parse status ("youtube · dQw4w9WgXcQ" or "Not a recognized YouTube or Vimeo URL") as the teacher types.
+- Toolbar buttons use inline SVGs that inherit `currentColor` so they stay visually consistent with the letter-glyph T / ∑ / ? buttons.
+- **S3 upload follow-up**: when the bucket is provisioned, add a presigned-URL server action and an "Upload" button to `ImageSidebar`. The `ImageElement.assetId?` field is already reserved for this path.
 
 **M2.3 — Quiz Blocks (complete, 2026-05-12)**
 
@@ -372,7 +389,9 @@ The user's auto-memory directory at `~/.claude/projects/.../memory/` is *also* p
 
 ---
 
-*Last updated: 2026-05-12. M2.3 (Quiz blocks) shipped: factory + view-only canvas renderer + contextual right-sidebar properties editor + `?` drag-from-toolbar + filmstrip placeholder + max-one-quiz-per-slide enforced at save. **Equation-fill kind removed** during build (felt redundant on review); **`NumericQuestion.correctValue` switched from `number` to `string`** so it absorbs symbolic answers ("2a", "g*sin(theta)") — M3 grader picks tolerance-vs-symbolic based on whether both sides parse as pure numbers. Q22 (one-blank-per-equation) and the "fill-in-the-blank is the primary mode" line in **Equation answers** are now stale; both should be deleted next pass.*
+*Last updated: 2026-05-13. M2.4 (Image + Video blocks) shipped: URL-embed-only (S3 not yet provisioned). YouTube thumbnail preview + play overlay in the editor canvas; Vimeo falls back to dark placeholder (no cheap thumbnail URL). Live parse-status in video sidebar. `PaletteType` extended to `"image"|"video"`. Next: M2.5 — Freehand drawing + Shapes.*
+
+*Carry-forward stale note from 2026-05-12: Q22 (one-blank-per-equation) and the "fill-in-the-blank is the primary mode" line in the Equation answers section are stale — equation-fill kind was removed in M2.3. Both should be deleted or rewritten when editing this file next.*
 
 ---
 

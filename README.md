@@ -68,18 +68,13 @@ omni-lab-project/
 | M2.2 | Text + Equation blocks — TipTap rich text, KaTeX+MathLive equation editor, drag-from-toolbar, custom resize handles |
 | M2.2 polish | Selection-based inline formatting, font-family picker (11 fonts), font-size controller, auto-grow textbox, drag-while-editing, horizontal snap, caret fixes |
 | M2.2b | Inline equations in text boxes (custom TipTap node), shared equation popup, font-size toolbar on equation select |
+| M2.3 | Quiz blocks — 5 question kinds (MC single/multi, short text, numeric, true/false), sidebar properties editor, max-one-quiz-per-slide constraint |
+| M2.4 | Image + video blocks — URL-embed, YouTube thumbnail preview, Vimeo placeholder, drag-from-toolbar, contextual sidebar |
 
-### In progress
-
-| Milestone | What's being built |
-|---|---|
-| M2.3 | Quiz blocks — all 6 question types, sidebar-based properties editing, max one quiz per slide |
-
-### Planned
+### In progress / Next
 
 | Milestone | Description |
 |---|---|
-| M2.4 | Image + video blocks |
 | M2.5 | Freehand drawing + shape library |
 | M2.6 | Desmos graph widget (teacher-configured with sliders) |
 | M2.7 | Code block — Python via Pyodide |

@@ -1,6 +1,6 @@
 "use client";
 
-export type PaletteType = "text" | "equation" | "quiz";
+export type PaletteType = "text" | "equation" | "image" | "video" | "quiz";
 
 interface ElementToolbarProps {
   onStartDrag: (type: PaletteType, e: React.MouseEvent) => void;
@@ -17,7 +17,7 @@ export function ElementToolbar({
 }: ElementToolbarProps) {
   const btn = (
     type: PaletteType,
-    label: string,
+    label: React.ReactNode,
     title: string,
     disabled = false,
   ) => {
@@ -50,7 +50,52 @@ export function ElementToolbar({
     <div className="flex items-center gap-0.5">
       {btn("text", "T", "Drag onto slide to insert a text box")}
       {btn("equation", "∑", "Drag onto slide to insert an equation")}
+      {btn("image", <ImageGlyph />, "Drag onto slide to insert an image")}
+      {btn("video", <VideoGlyph />, "Drag onto slide to insert a video")}
       {btn("quiz", "?", "Drag onto slide to insert a quiz question", quizDisabled)}
     </div>
+  );
+}
+
+// Inline SVGs so the icons inherit `currentColor` from the surrounding text
+// classes (text-gray-600 / text-gray-300 / text-indigo-700) and stay visually
+// consistent with the letter-glyph buttons next to them.
+function ImageGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect
+        x="3"
+        y="5"
+        width="18"
+        height="14"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <circle cx="9" cy="10" r="1.5" fill="currentColor" />
+      <path
+        d="M21 17l-5-5-4 4-3-3-6 6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function VideoGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect
+        x="3"
+        y="5"
+        width="18"
+        height="14"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path d="M10 9.5v5l5-2.5-5-2.5z" fill="currentColor" />
+    </svg>
   );
 }

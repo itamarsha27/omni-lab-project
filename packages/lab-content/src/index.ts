@@ -5,6 +5,8 @@ import type {
   LabContent,
   TextElement,
   EquationElement,
+  ImageElement,
+  VideoElement,
   QuizElement,
   QuizQuestion,
 } from "./types";
@@ -113,6 +115,42 @@ export function createQuizQuestion(kind: QuizQuestion["kind"]): QuizQuestion {
     case "true-false":
       return { ...base, kind: "true-false", correctAnswer: true };
   }
+}
+
+/** Default image element inserted by the toolbar image button. Empty `src`
+ *  means the editor renders an empty-state placeholder until the teacher
+ *  pastes a URL in the sidebar. S3-upload path comes in a later pass. */
+export function createImageElement(overrides?: Partial<ImageElement>): ImageElement {
+  return {
+    id: makeId(),
+    type: "image",
+    src: "",
+    alt: "",
+    x: 560,
+    y: 290,
+    width: 800,
+    height: 500,
+    zIndex: 1,
+    ...overrides,
+  };
+}
+
+/** Default video element inserted by the toolbar video button. Empty `url`
+ *  means the editor renders an empty-state placeholder. The editor only ever
+ *  shows a static thumbnail + play overlay; actual iframe playback happens
+ *  in preview/session mode (M3). */
+export function createVideoElement(overrides?: Partial<VideoElement>): VideoElement {
+  return {
+    id: makeId(),
+    type: "video",
+    url: "",
+    x: 560,
+    y: 290,
+    width: 800,
+    height: 500,
+    zIndex: 1,
+    ...overrides,
+  };
 }
 
 /** Default quiz element inserted by the toolbar ? button. */

@@ -7,6 +7,7 @@ import katex from "katex";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "@omnilab/lab-content";
 import type { Slide, SlideElement } from "@omnilab/lab-content";
 import { ContextMenu, type ContextMenuItem } from "./context-menu";
+import { parseVideoUrl, videoThumbnailUrl } from "./elements/video-url";
 
 // Default font sizes — must match the corresponding editor element renderers
 // (text-element.tsx BASE_FONT_PX, equation-element.tsx DEFAULT_FONT_PX) so the
@@ -59,6 +60,67 @@ function ThumbElement({ el }: { el: SlideElement }) {
         }}
         dangerouslySetInnerHTML={{ __html: html }}
       />
+    );
+  }
+  if (el.type === "image") {
+    if (!el.src.trim()) {
+      return (
+        <div
+          style={{
+            ...boxed,
+            background: "#f3f4f6",
+            border: "1px dashed #d1d5db",
+          }}
+        />
+      );
+    }
+    return (
+      <div style={boxed}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={el.src}
+          alt=""
+          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+        />
+      </div>
+    );
+  }
+  if (el.type === "video") {
+    const parsed = parseVideoUrl(el.url);
+    const thumb = parsed ? videoThumbnailUrl(parsed) : null;
+    return (
+      <div style={{ ...boxed, background: "#0b0f19", position: "absolute" }}>
+        {thumb && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={thumb}
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        )}
+        {/* Tiny play triangle in the middle so video blocks read as video
+            even at filmstrip scale. */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <div
+            style={{
+              width: 0,
+              height: 0,
+              borderTop: `${Math.min(el.width, el.height) * 0.18}px solid transparent`,
+              borderBottom: `${Math.min(el.width, el.height) * 0.18}px solid transparent`,
+              borderLeft: `${Math.min(el.width, el.height) * 0.28}px solid white`,
+              opacity: 0.9,
+            }}
+          />
+        </div>
+      </div>
     );
   }
   if (el.type === "quiz") {
