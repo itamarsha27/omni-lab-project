@@ -6,6 +6,7 @@ import type { Slide, SlideElement } from "@omnilab/lab-content";
 import type { EditorAction } from "./lab-editor";
 import { TextElement } from "./elements/text-element";
 import { EquationElement } from "./elements/equation-element";
+import { QuizElement } from "./elements/quiz-element";
 import { ElementHandles } from "./elements/element-handles";
 import { ContextMenu, type ContextMenuItem } from "./context-menu";
 
@@ -85,6 +86,8 @@ export function EditorCanvas({
         return <TextElement key={el.id} element={el} {...common} />;
       case "equation":
         return <EquationElement key={el.id} element={el} {...common} />;
+      case "quiz":
+        return <QuizElement key={el.id} element={el} {...common} />;
       default:
         return (
           <div

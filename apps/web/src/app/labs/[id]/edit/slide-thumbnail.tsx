@@ -61,6 +61,28 @@ function ThumbElement({ el }: { el: SlideElement }) {
       />
     );
   }
+  if (el.type === "quiz") {
+    // Recognizable quiz placeholder — large "?" badge over a soft-indigo card,
+    // matches the editor's quiz styling at a glance.
+    return (
+      <div
+        style={{
+          ...boxed,
+          background: "white",
+          border: "2px solid #c7d2fe",
+          borderRadius: 12,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#6366f1",
+          fontSize: Math.min(el.width, el.height) * 0.5,
+          fontWeight: 700,
+        }}
+      >
+        ?
+      </div>
+    );
+  }
   // Placeholder for other types — keep the structural footprint visible.
   return (
     <div

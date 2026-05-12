@@ -1,6 +1,13 @@
 export * from "./types";
 
-import type { Slide, LabContent, TextElement, EquationElement } from "./types";
+import type {
+  Slide,
+  LabContent,
+  TextElement,
+  EquationElement,
+  QuizElement,
+  QuizQuestion,
+} from "./types";
 
 // Virtual canvas dimensions — elements are positioned in this coordinate space
 // and scaled to fit the display container via CSS transform.
@@ -74,6 +81,51 @@ export function createEquationElement(overrides?: Partial<EquationElement>): Equ
     height: 120,
     zIndex: 1,
     fontSize: 48, // matches default text element; user can scale up via the size picker
+    ...overrides,
+  };
+}
+
+/**
+ * Default values shared by every QuizQuestion variant. Q29 locks defaults to
+ * 100 pts + time-decayed scoring; teacher can override per-question in the
+ * right-panel sidebar.
+ */
+const QUIZ_DEFAULT_POINTS = 100;
+const QUIZ_DEFAULT_TIME_DECAY = true;
+
+/** Build a fresh question shape for a given `kind` with sensible defaults. */
+export function createQuizQuestion(kind: QuizQuestion["kind"]): QuizQuestion {
+  const base = {
+    id: makeId(),
+    prompt: "",
+    points: QUIZ_DEFAULT_POINTS,
+    timeDecay: QUIZ_DEFAULT_TIME_DECAY,
+  };
+  switch (kind) {
+    case "mc-single":
+      return { ...base, kind: "mc-single", options: ["", ""], correctIndex: 0 };
+    case "mc-multi":
+      return { ...base, kind: "mc-multi", options: ["", ""], correctIndices: [] };
+    case "short-text":
+      return { ...base, kind: "short-text", correctAnswers: [""] };
+    case "numeric":
+      return { ...base, kind: "numeric", correctValue: "", tolerance: 0, checkUnit: false };
+    case "true-false":
+      return { ...base, kind: "true-false", correctAnswer: true };
+  }
+}
+
+/** Default quiz element inserted by the toolbar ? button. */
+export function createQuizElement(overrides?: Partial<QuizElement>): QuizElement {
+  return {
+    id: makeId(),
+    type: "quiz",
+    question: createQuizQuestion("mc-single"),
+    x: 460,
+    y: 290,
+    width: 1000,
+    height: 500,
+    zIndex: 1,
     ...overrides,
   };
 }

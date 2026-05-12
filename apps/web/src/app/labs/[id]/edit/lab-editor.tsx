@@ -6,6 +6,7 @@ import {
   createBlankSlide,
   createTextElement,
   createEquationElement,
+  createQuizElement,
   parseLabContent,
   CANVAS_WIDTH,
 } from "@omnilab/lab-content";
@@ -14,7 +15,8 @@ import { saveLabContent } from "../../actions";
 import { LabEditorActions } from "./lab-editor-actions";
 import { SlideFilmstrip } from "./slide-filmstrip";
 import { EditorCanvas } from "./editor-canvas";
-import { ElementToolbar } from "./elements/element-toolbar";
+import { ElementToolbar, type PaletteType } from "./elements/element-toolbar";
+import { QuizSidebar } from "./elements/quiz-sidebar";
 
 // ============================================================================
 // State & reducer
@@ -188,10 +190,22 @@ interface LabEditorProps {
 }
 
 interface PaletteDrag {
-  type: "text" | "equation";
+  type: PaletteType;
   mouseX: number;
   mouseY: number;
   overCanvas: boolean;
+}
+
+function paletteFactory(type: PaletteType) {
+  if (type === "text") return createTextElement;
+  if (type === "equation") return createEquationElement;
+  return createQuizElement;
+}
+
+function paletteGhostLabel(type: PaletteType): string {
+  if (type === "text") return "T  Text";
+  if (type === "equation") return "∑  Equation";
+  return "?  Quiz";
 }
 
 export function LabEditor({ labId, initialTitle, initialContent }: LabEditorProps) {
@@ -210,8 +224,16 @@ export function LabEditor({ labId, initialTitle, initialContent }: LabEditorProp
 
   const doSave = useCallback(async () => {
     const payload: LabContent = { contentVersion: 1, slides: slidesRef.current };
-    await saveLabContent(labId, payload);
-    dispatch({ type: "MARK_SAVED" });
+    try {
+      await saveLabContent(labId, payload);
+      dispatch({ type: "MARK_SAVED" });
+    } catch (err) {
+      // Surface server-side validation errors (e.g. max-one-quiz-per-slide) so
+      // the teacher knows their lab didn't save. Unsaved dot stays on as well.
+      const msg = err instanceof Error ? err.message : "Failed to save lab.";
+      console.error("[lab-editor] save failed:", err);
+      alert(msg);
+    }
   }, [labId]);
 
   const scheduleSave = useCallback(() => {
@@ -249,9 +271,9 @@ export function LabEditor({ labId, initialTitle, initialContent }: LabEditorProp
   }, [doSave]);
 
   // ── Drag-from-toolbar to canvas ───────────────────────────────────────────
-  // Mousedown on T/∑ → ghost follows cursor → mouseup on canvas creates element.
+  // Mousedown on T/∑/? → ghost follows cursor → mouseup on canvas creates element.
   const startPaletteDrag = useCallback(
-    (type: "text" | "equation", e: React.MouseEvent) => {
+    (type: PaletteType, e: React.MouseEvent) => {
       e.preventDefault();
       const initial: PaletteDrag = {
         type,
@@ -288,10 +310,16 @@ export function LabEditor({ labId, initialTitle, initialContent }: LabEditorProp
         if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) {
           return; // dropped outside canvas — cancel
         }
+        // Max-one-quiz-per-slide defense-in-depth: even if the toolbar button
+        // wasn't disabled, refuse the drop if the slide already has a quiz.
+        if (type === "quiz") {
+          const slide = slidesRef.current[selectedIndexRef.current];
+          if (slide && slide.elements.some((el) => el.type === "quiz")) return;
+        }
         const scale = r.width / CANVAS_WIDTH;
         const cx = (ev.clientX - r.left) / scale;
         const cy = (ev.clientY - r.top) / scale;
-        const factory = type === "text" ? createTextElement : createEquationElement;
+        const factory = paletteFactory(type);
         // Center the new element on the drop point
         const def = factory();
         const el = factory({
@@ -309,6 +337,9 @@ export function LabEditor({ labId, initialTitle, initialContent }: LabEditorProp
 
   const slides = state.history.present;
   const currentSlide = slides[state.selectedIndex] ?? slides[0]!;
+  const selectedEl =
+    currentSlide.elements.find((el) => el.id === state.selectedElementId) ?? null;
+  const slideHasQuiz = currentSlide.elements.some((el) => el.type === "quiz");
 
   return (
     <main className="flex h-screen flex-col bg-[#e8e8e8] overflow-hidden">
@@ -322,6 +353,7 @@ export function LabEditor({ labId, initialTitle, initialContent }: LabEditorProp
             <ElementToolbar
               onStartDrag={startPaletteDrag}
               activeType={paletteDrag?.type ?? null}
+              quizDisabled={slideHasQuiz}
             />
           }
         />
@@ -356,13 +388,24 @@ export function LabEditor({ labId, initialTitle, initialContent }: LabEditorProp
         </div>
 
         <aside
-          className="w-60 shrink-0 border-l border-gray-200 bg-white"
+          className="w-72 shrink-0 border-l border-gray-200 bg-white"
           onMouseDown={(e) => {
+            // Mirror the canvas-padding wrapper: clicks on the empty aside
+            // body deselect; clicks inside an interactive child bubble up
+            // unaffected because of the e.target === e.currentTarget guard.
             if (e.target === e.currentTarget) {
               dispatch({ type: "SELECT_ELEMENT", id: null });
             }
           }}
-        />
+        >
+          {selectedEl?.type === "quiz" && (
+            <QuizSidebar
+              element={selectedEl}
+              slideIndex={state.selectedIndex}
+              dispatch={dispatch}
+            />
+          )}
+        </aside>
       </div>
 
       {/* Ghost cursor while dragging from toolbar */}
@@ -385,7 +428,7 @@ export function LabEditor({ labId, initialTitle, initialContent }: LabEditorProp
               userSelect: "none",
             }}
           >
-            {paletteDrag.type === "text" ? "T  Text" : "∑  Equation"}
+            {paletteGhostLabel(paletteDrag.type)}
             {!paletteDrag.overCanvas && <span style={{ opacity: 0.7, marginLeft: 6 }}>· drag onto slide</span>}
           </div>,
           document.body

@@ -164,17 +164,16 @@ export interface ShortTextQuestion extends BaseQuestion {
 
 export interface NumericQuestion extends BaseQuestion {
   kind: "numeric";
-  correctValue: number;
-  tolerance: number; // absolute tolerance (e.g. ±0.01)
+  /**
+   * Stored as a string so teachers can author either a pure number ("3.14")
+   * or a symbolic expression with parameters ("2a", "g*sin(theta)"). The M3
+   * grader picks the strategy: if both sides parse as pure numbers, apply
+   * `tolerance`; otherwise compare symbolically with mathjs.
+   */
+  correctValue: string;
+  tolerance: number; // absolute tolerance — only used when correctValue is pure-numeric
   checkUnit: boolean; // Q23: check value OR unit, not both simultaneously
   unit?: string; // expected unit string when checkUnit is true
-}
-
-export interface EquationFillQuestion extends BaseQuestion {
-  kind: "equation-fill";
-  template: string; // KaTeX with \boxed{?_blank} slot
-  blankId: string; // Q22: one blank per equation in v1
-  correctLatex: string;
 }
 
 export interface TrueFalseQuestion extends BaseQuestion {
@@ -187,5 +186,4 @@ export type QuizQuestion =
   | MultipleChoiceMultiQuestion
   | ShortTextQuestion
   | NumericQuestion
-  | EquationFillQuestion
   | TrueFalseQuestion;

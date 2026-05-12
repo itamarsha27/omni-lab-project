@@ -239,7 +239,28 @@ Defense-in-depth uniqueness: the `Answer` and `Participant` constraints exist bo
 
 ### Next
 
-**M2.3 — Quiz Blocks (START HERE)**
+**M2.4 — Image + Video blocks (START HERE)**
+
+Step 4 of the locked M2 build order. `ImageElement` and `VideoElement` types already exist in `packages/lab-content/src/types.ts`; what's missing is the factory, renderer, toolbar button, and sidebar wiring.
+
+**Image blocks (Q7):**
+- Two insertion paths: URL embed (simpler, build first) and upload from device via S3 presigned URL (requires AWS bucket + CloudFront + presigned-URL server action — check whether S3 is provisioned before starting this path).
+- Renderer: `<img src alt>` inside the standard absolute-positioned box. Existing resize handles already work.
+- Sidebar (Q20b): image src/URL input + alt text field.
+- Thumbnail: `<img>` at thumbnail scale.
+
+**Video embeds (Q8):**
+- YouTube and Vimeo URLs. Extract video ID → render `<iframe>`.
+- In the editor canvas: static YouTube thumbnail image (`https://img.youtube.com/vi/{id}/0.jpg`) + play-icon overlay — keeps the canvas drag/select working (an active `<iframe>` captures mouse events and breaks everything).
+- Sidebar: URL input.
+
+**Before starting:** confirm whether S3 is provisioned. If not, ship URL-embed-only for both image and video first; add S3 upload in a follow-up pass.
+
+---
+
+### Done (archive)
+
+**M2.3 — Quiz Blocks (complete, 2026-05-12)**
 
 The third sub-milestone of M2. The data model already exists (`QuizElement` in `packages/lab-content/src/types.ts` — discriminated union of 6 question kinds: `mc-single`, `mc-multi`, `short-text`, `numeric`, `equation-fill`, `true-false`). What's missing is the **renderer + authoring UI + grading helpers**.
 
@@ -260,8 +281,21 @@ Open product questions — both now answered:
 - Default points: **100, time-decayed = true** (Q29 — locked).
 - Quiz-properties UI location: **right-panel sidebar** (Q20b — locked 2026-05-11).
 
-After M2:
-- **M3** — live session lobby + Kahoot flow + quiz grading runtime (uses `mathjs` for equation-fill / numeric).
+**M3 — Live session (Kahoot flow) + grading runtime**
+
+Non-obvious design points from the M2.3 architecture review — get these wrong and "future us" pays:
+
+- **`sanitizeQuestion()` is the single anti-cheat boundary.** Before broadcasting a question to students, strip correct-answer fields (`correctIndex`, `correctIndices`, `correctValue`, `correctAnswers`, `correctAnswer`). Implement as a discriminated switch with an `assertNever` default — adding a new question kind without sanitizing must fail to compile.
+- **`contentSnapshot` comes out of Prisma as untyped `JsonValue`.** Add a `parseLabContent`-style runtime guard at the realtime-server entry point. One corrupted blob else kills the whole session room.
+- **Numeric grading is dual-mode.** If both submitted and `correctValue` parse as pure numbers → apply `tolerance`. Otherwise → `math.simplify("(submitted) - (expected)").toString() === "0"`. v1 grammar = simple algebra only; mathjs's `simplify` is unreliable on trig identities / integrals.
+- **Student numeric input must be `<input type="text">`** — `numeric` now accepts symbolic answers ("2a", "g*sin(theta)"), so a `type="number"` keyboard blocks valid input.
+- **No module-scope mutable state in `apps/realtime/`.** Push every session-state field to Redis (Upstash) from day one. Single-instance today, but the moment we want HA the fix must be "swap storage layer," not "rewrite handlers."
+- **`apps/realtime/` needs new workspace deps when M3 starts**: `@omnilab/lab-content` + `mathjs`. Currently a stub.
+- **`Answer.@@unique([participantId, blockId])` is the hard answer-lock.** Treat `P2002` on insert as the "they already answered" success case, not an error.
+
+Open product question — **scoring decay curve**: TBD. Kahoot's is roughly linear 100% → ~50% over the question duration; specify when implementing.
+
+After M3:
 - **M4** — landing, polished onboarding, gradebook basics
 - **M5** — marketplace stub (or defer to v1.1)
 
@@ -338,7 +372,7 @@ The user's auto-memory directory at `~/.claude/projects/.../memory/` is *also* p
 
 ---
 
-*Last updated: 2026-05-11. M2.2 + M2.2-polish + M2.2b complete (Day 4 weekly recap covers inline equations + equation toolbar). Starting M2.3 (Quiz blocks) next. Right-panel sidebar locked as the contextual properties surface (Q20b). Inline equations inside text boxes are done: shared EquationPopup, InlineEquation TipTap node, font-size support on both standalone and inline equations.*
+*Last updated: 2026-05-12. M2.3 (Quiz blocks) shipped: factory + view-only canvas renderer + contextual right-sidebar properties editor + `?` drag-from-toolbar + filmstrip placeholder + max-one-quiz-per-slide enforced at save. **Equation-fill kind removed** during build (felt redundant on review); **`NumericQuestion.correctValue` switched from `number` to `string`** so it absorbs symbolic answers ("2a", "g*sin(theta)") — M3 grader picks tolerance-vs-symbolic based on whether both sides parse as pure numbers. Q22 (one-blank-per-equation) and the "fill-in-the-blank is the primary mode" line in **Equation answers** are now stale; both should be deleted next pass.*
 
 ---
 

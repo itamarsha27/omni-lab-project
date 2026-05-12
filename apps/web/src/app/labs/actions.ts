@@ -59,6 +59,19 @@ export async function saveLabContent(
 ): Promise<void> {
   const { userId } = await getOwnedLab(labId);
 
+  // Locked v1 constraint: at most one quiz block per slide. Enforced here
+  // (defense-in-depth) so a programmatic bug or stale UI can't slip an
+  // invalid lab into the DB. The toolbar button is the primary UI gate.
+  for (let i = 0; i < content.slides.length; i++) {
+    const slide = content.slides[i]!;
+    const quizCount = slide.elements.filter((el) => el.type === "quiz").length;
+    if (quizCount > 1) {
+      throw new Error(
+        `Slide ${i + 1} has ${quizCount} quiz blocks — only one quiz per slide is allowed.`
+      );
+    }
+  }
+
   await prisma.lab.update({
     where: { id: labId, authorId: userId },
     data: { content: content as unknown as Prisma.InputJsonValue },
