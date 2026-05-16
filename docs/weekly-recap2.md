@@ -232,3 +232,110 @@ M2.4 — Image + Video blocks (URL-embed only). Built the full image and video a
 - Files modified: `packages/lab-content/src/index.ts`, `elements/element-toolbar.tsx`, `lab-editor.tsx`, `editor-canvas.tsx`, `slide-thumbnail.tsx`, `docs/PROJECT_CONTEXT.md`, `README.md`.
 - Types changed: `PaletteType` extended with `"image"` and `"video"`.
 - Decisions: no iframe in editor canvas; Vimeo thumbnail not fetched; S3 upload deferred.
+
+---
+
+## Day 3 — 2026-05-17
+
+### Theme of the day
+M2.5 — Freehand Drawing + Shapes + Groups + Multi-select + Rotation handles. The largest single-session build to date (2,930 net lines). Added three new element types, overhauled the selection model from single-select to multi-select, and added a rotation handle with snap to the resize handles component.
+
+---
+
+### What we built — M2.5
+
+#### New element types
+
+**`ShapeElement` renderer (`elements/shape-element.tsx`)**
+- SVG renderer for 9 shape kinds: `rectangle`, `circle`, `triangle`, `line`, `arrow`, `vector`, `arrow-double`, `arrow-curved`, `ground`, `spring`.
+- The physics-aware set (vector, ground, spring, arrow-double, arrow-curved) is the STEM moat — no other slide editor ships these out of the box.
+- `ShapeKind` union is exhaustive: an `assertNever` at the bottom of the SVG switch means adding a new kind without handling it is a compile error.
+- `fill`, `stroke`, `strokeWidth` supported on all shapes. `strokeStyle?: "solid" | "dashed" | "dotted"` maps to SVG `strokeDasharray`.
+- `label?: string` renders via KaTeX on the shape. Label position is shape-aware: arrow-like kinds sit the label past the tip in element-local coords so it reads "ahead of the tip" at any rotation angle. The label HTML counter-rotates to stay upright on screen.
+- CSS `transform: rotate(Rdeg)` on the wrapper via `rotation?: number` (degrees, CW positive). Wrapper rotation, SVG body, and KaTeX label all move together; only the label text counter-rotates to stay readable.
+
+**`ShapeSidebar` (`elements/shape-sidebar.tsx`)**
+- Fill color picker, stroke color picker, stroke width slider.
+- Stroke style buttons: solid / dashed / dotted.
+- Direction buttons: four cardinal angles (0° / 90° / 180° / 270°) as quick-set for shapes that have a natural orientation (arrows, vectors).
+- Label input + live KaTeX preview rendered below the input.
+
+**`DrawingElement` renderer (`elements/drawing-element.tsx`)**
+- Freehand pen as SVG `<polyline>` elements inside a `viewBox`-ed `<svg>`. Coords are element-local (0..`width`, 0..`height`), not 1920×1080 absolute — so strokes scale proportionally when the element is resized.
+- Click-to-select, then draw pattern (mirrors Google Slides): first pointer event on an unselected drawing box selects it without starting a stroke. Avoids the "drop and accidentally draw" UX.
+- Each stroke bakes its own `color` + `width` at commit time. `currentColor` / `currentWidth` on the element drive the sidebar controls, but already-drawn strokes are unaffected by changing them.
+- Ctrl/Cmd-click on a drawing box dispatches `TOGGLE_ELEMENT_SELECTION` (multi-select) instead of starting a stroke.
+
+**`DrawingSidebar` (`elements/drawing-sidebar.tsx`)**
+- Color picker (HTML `<input type="color">`), pen width slider, "Clear drawing" button (empties `strokes[]`).
+
+**`GroupElement` (`elements/group-element.tsx`)**
+- Recursive container: `children: SlideElement[]` store coords relative to the group's origin, not the canvas. A CSS `transform: rotate(Rdeg)` wrapper rotates all children visually as a unit.
+- Children are rendered statically (no interaction) inside the group. A transparent overlay on top handles click and drag for the group as a whole. Children can't be individually clicked — ungroup first.
+- `GROUP_SELECTED` reducer action: computes the union bbox of all selected elements, converts each element's canvas coords to group-local coords, inserts one `GroupElement`, removes the originals.
+- `UNGROUP_ELEMENT` reducer action: inverse — converts children's group-local coords back to canvas coords (accounting for the group's rotation), re-inserts them, and removes the group.
+- Factories: `createGroupFromElements(elements)` and `ungroupElement(group)` in `packages/lab-content/src/index.ts`.
+
+---
+
+#### Multi-select overhaul
+
+`selectedElementId: string | null` → `selectedElementIds: string[]` throughout the entire editor. Single-select is just length 1; empty array = nothing selected. All element components (text, equation, image, video, quiz, shape, drawing, group) updated to accept and respect `selectedElementIds`.
+
+New reducer actions:
+- `TOGGLE_ELEMENT_SELECTION` — Ctrl/Cmd-click flips an element's presence in the array.
+- `SELECT_ELEMENTS` — used by lasso to replace the whole selection at once.
+- `MOVE_ELEMENTS_LIVE` — moves all selected elements together in one live dispatch (one undo step per drag).
+- `DELETE_ELEMENTS` — removes all ids in the array in one step.
+- `GROUP_SELECTED` / `UNGROUP_ELEMENT` — group/ungroup operations.
+
+**Lasso selection** (`editor-canvas.tsx`):
+- Mousedown on the blank slide background (not on any element) starts a lasso.
+- A 4 screen-px threshold separates a no-move click (clears selection) from a drag (draws the lasso rectangle).
+- On mouseup, the lasso rectangle's canvas-space coords are compared against every top-level element's bbox; intersecting elements are added to the selection via `SELECT_ELEMENTS`.
+- The lasso rectangle renders as a blue dashed border with translucent fill over the canvas.
+
+**`MultiSelectHandles` (`elements/multi-select-handles.tsx`)**:
+- When 2+ elements are selected, renders a combined bounding box (union of all selected elements' bboxes).
+- Drag strips on all four sides move the entire selection together via `MOVE_ELEMENTS_LIVE`.
+- "Group" button in the top-right corner dispatches `GROUP_SELECTED`.
+
+---
+
+#### Rotation handles (`elements/element-handles.tsx`)
+
+- A circular handle rendered above the top edge of the selection outline (22 px diameter, 28 px gap from top edge).
+- Drag: `atan2(cursor − element center)` gives the angle in degrees. On mouseup: dispatches `UPDATE_ELEMENT` with the new `rotation` field (one undo step per rotation gesture).
+- 45° snap grid: rotation snaps to the nearest multiple of 45° when within 5° of a snap point. Hold Shift to bypass for free rotation.
+- Only rendered for elements that have a `rotation` field: `ShapeElement` and `GroupElement`.
+
+**Rotation-aware resize:**
+- Before this fix, dragging a resize handle on a rotated element would both resize and translate it (the anchor corner drifted).
+- Fix: for each resize direction, the anchor point (the corner opposite to the dragged handle) is converted to canvas space using the element's rotation before the resize starts. After computing the new width/height, the new top-left is derived by rotating the anchor back — so the anchor stays pinned in canvas space while the opposite corner moves.
+
+---
+
+#### Type model changes (`packages/lab-content/src/types.ts` + `src/index.ts`)
+
+- `ShapeKind` expanded from 5 → 9 variants.
+- `ShapeElement` gained `label?`, `strokeStyle?`, `rotation?`.
+- `DrawingElement` gained `currentColor` + `currentWidth`; stroke coords are now element-local (not 1920×1080 global).
+- `GroupElement` added as a new discriminated-union member of `SlideElement`. Recursive: `children: SlideElement[]`.
+- `ARROW_LIKE_KINDS: Set<ShapeKind>` exported constant (used to determine label positioning in the renderer).
+- New factories: `createDrawingElement`, `createShapeElement`, `createArrowElement`, `createGroupFromElements`, `ungroupElement`.
+
+---
+
+### What's next — M2.6 — Desmos graph widget
+
+Step 6 of the locked M2 build order. Teacher-configured function graphs with interactive sliders (e.g. `y = x² + c`, slider for `c`). Students view only. Desmos API is free for education. Key open questions before starting: embed strategy (iframe vs JS API), teacher authoring flow in the sidebar, how sliders are exposed to students in session mode.
+
+---
+
+### Stats
+- Commit: `de22be7`
+- Files created: `elements/shape-element.tsx`, `elements/shape-sidebar.tsx`, `elements/drawing-element.tsx`, `elements/drawing-sidebar.tsx`, `elements/group-element.tsx`, `elements/multi-select-handles.tsx`.
+- Files modified: `packages/lab-content/src/types.ts`, `packages/lab-content/src/index.ts`, `elements/element-handles.tsx`, `elements/element-toolbar.tsx`, `elements/use-element-drag.ts`, `elements/text-element.tsx`, `elements/equation-element.tsx`, `elements/image-element.tsx`, `elements/video-element.tsx`, `elements/quiz-element.tsx`, `lab-editor.tsx`, `editor-canvas.tsx`, `slide-thumbnail.tsx`.
+- Net lines: +2,930 / −170.
+- Types added: `GroupElement`, `ARROW_LIKE_KINDS`. `ShapeKind` extended (5→9). `ShapeElement` + `DrawingElement` gained new optional fields.
+- Selection model changed: `selectedElementId: string | null` → `selectedElementIds: string[]` everywhere.
