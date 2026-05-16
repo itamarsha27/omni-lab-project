@@ -90,10 +90,17 @@ export interface CodeElement extends BaseElement {
 export interface DrawingElement extends BaseElement {
   type: "drawing";
   strokes: DrawingStroke[];
+  /** Pen color used for the *next* stroke. Sidebar updates this; each stroke
+   *  bakes its own color/width so already-drawn strokes keep theirs. */
+  currentColor: string;
+  /** Pen width in element-local canvas px. */
+  currentWidth: number;
 }
 
 export interface DrawingStroke {
-  points: [number, number][]; // [x, y] pairs in 1920×1080 space
+  /** [x, y] pairs in **element-local** coordinates (0..element.width, 0..element.height).
+   *  Resizing the element scales strokes proportionally via the SVG viewBox. */
+  points: [number, number][];
   color: string;
   width: number;
 }
@@ -104,9 +111,30 @@ export interface ShapeElement extends BaseElement {
   fill: string;
   stroke: string;
   strokeWidth: number;
+  /** Optional text label rendered on the shape. Critical for free body
+   *  diagrams (labeling forces "F_g" / masses "m" / etc.). */
+  label?: string;
+  /** Stroke dash style. Default solid. */
+  strokeStyle?: "solid" | "dashed" | "dotted";
+  /** Rotation in degrees, CW positive (matches CSS transform). Default 0.
+   *  Applied via CSS transform on the wrapper, so the SVG body, label, and
+   *  any hit-test geometry all rotate together around the element's center.
+   *  Replaces the older `direction` field — the sidebar's 4 cardinal buttons
+   *  now just set rotation to 0/90/180/270. */
+  rotation?: number;
 }
 
-export type ShapeKind = "rectangle" | "circle" | "triangle" | "arrow" | "line";
+export type ShapeKind =
+  | "rectangle"
+  | "circle"
+  | "triangle"
+  | "line"
+  | "arrow"
+  | "arrow-double"
+  | "arrow-curved"
+  | "vector"
+  | "ground"
+  | "spring";
 
 export interface PhysicsElement extends BaseElement {
   type: "physics";
@@ -117,6 +145,25 @@ export interface ChemistryElement extends BaseElement {
   type: "chemistry";
   kind: "periodic-table" | "reaction";
   config: Record<string, unknown>;
+}
+
+/**
+ * A logical container that wraps multiple child elements so they move/rotate
+ * as a single object. Children store their `x` / `y` *relative to the group's
+ * origin*, so rotating the group is just a CSS transform on the wrapper and
+ * descendants inherit. The type is recursive: groups can contain groups.
+ *
+ * Ungrouping is the inverse — children's coords are converted back to canvas
+ * coords, and if the group had a non-zero rotation, that rotation is baked
+ * into each child (position rotated around the group center, shape children's
+ * own rotation is added on).
+ */
+export interface GroupElement extends BaseElement {
+  type: "group";
+  children: SlideElement[];
+  /** Free rotation in degrees, CW positive. Applies via CSS transform on the
+   *  group's wrapper, so descendants visually rotate as a unit. */
+  rotation?: number;
 }
 
 export type SlideElement =
@@ -130,7 +177,8 @@ export type SlideElement =
   | DrawingElement
   | ShapeElement
   | PhysicsElement
-  | ChemistryElement;
+  | ChemistryElement
+  | GroupElement;
 
 // ============================================================================
 // Quiz questions — discriminated union on `kind`

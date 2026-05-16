@@ -8,6 +8,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from "@omnilab/lab-content";
 import type { Slide, SlideElement } from "@omnilab/lab-content";
 import { ContextMenu, type ContextMenuItem } from "./context-menu";
 import { parseVideoUrl, videoThumbnailUrl } from "./elements/video-url";
+import { ShapeSvg, ShapeLabel } from "./elements/shape-element";
 
 // Default font sizes — must match the corresponding editor element renderers
 // (text-element.tsx BASE_FONT_PX, equation-element.tsx DEFAULT_FONT_PX) so the
@@ -120,6 +121,60 @@ function ThumbElement({ el }: { el: SlideElement }) {
             }}
           />
         </div>
+      </div>
+    );
+  }
+  if (el.type === "shape") {
+    // Rotation is applied via CSS transform on the wrapper — same convention
+    // as the editor canvas — so the thumbnail mirrors what the user sees.
+    const rot = el.rotation ?? 0;
+    return (
+      <div
+        style={{
+          ...boxed,
+          transform: rot !== 0 ? `rotate(${rot}deg)` : undefined,
+          transformOrigin: "center center",
+        }}
+      >
+        <ShapeSvg element={el} />
+        <ShapeLabel element={el} />
+      </div>
+    );
+  }
+  if (el.type === "drawing") {
+    if (el.strokes.length === 0) {
+      // Empty drawing box — show a soft placeholder so the slot is visible.
+      return (
+        <div
+          style={{
+            ...boxed,
+            background: "#fafafa",
+            border: "1px dashed #e5e7eb",
+          }}
+        />
+      );
+    }
+    return (
+      <div style={boxed}>
+        <svg
+          width="100%"
+          height="100%"
+          viewBox={`0 0 ${el.width} ${el.height}`}
+          preserveAspectRatio="none"
+          style={{ display: "block" }}
+        >
+          {el.strokes.map((stroke, i) => (
+            <polyline
+              key={i}
+              points={stroke.points.map(([x, y]) => `${x},${y}`).join(" ")}
+              fill="none"
+              stroke={stroke.color}
+              strokeWidth={stroke.width}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          ))}
+        </svg>
       </div>
     );
   }

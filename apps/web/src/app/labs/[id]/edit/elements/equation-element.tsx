@@ -136,6 +136,10 @@ export function EquationElement({
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
+    if (e.ctrlKey || e.metaKey) {
+      dispatch({ type: "TOGGLE_ELEMENT_SELECTION", id: element.id });
+      return;
+    }
     if (!isSelected) {
       dispatch({ type: "SELECT_ELEMENT", id: element.id });
     }

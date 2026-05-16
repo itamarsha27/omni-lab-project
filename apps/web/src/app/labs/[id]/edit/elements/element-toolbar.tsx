@@ -1,6 +1,14 @@
 "use client";
 
-export type PaletteType = "text" | "equation" | "image" | "video" | "quiz";
+export type PaletteType =
+  | "text"
+  | "equation"
+  | "image"
+  | "video"
+  | "quiz"
+  | "drawing"
+  | "shape"
+  | "arrow";
 
 interface ElementToolbarProps {
   onStartDrag: (type: PaletteType, e: React.MouseEvent) => void;
@@ -52,6 +60,9 @@ export function ElementToolbar({
       {btn("equation", "∑", "Drag onto slide to insert an equation")}
       {btn("image", <ImageGlyph />, "Drag onto slide to insert an image")}
       {btn("video", <VideoGlyph />, "Drag onto slide to insert a video")}
+      {btn("drawing", <PencilGlyph />, "Drag onto slide to insert a drawing box")}
+      {btn("shape", <ShapeGlyph />, "Drag onto slide to insert a shape")}
+      {btn("arrow", <ArrowGlyph />, "Drag onto slide to insert an arrow / vector / line")}
       {btn("quiz", "?", "Drag onto slide to insert a quiz question", quizDisabled)}
     </div>
   );
@@ -96,6 +107,61 @@ function VideoGlyph() {
         strokeWidth="2"
       />
       <path d="M10 9.5v5l5-2.5-5-2.5z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function PencilGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M16.5 3.5l4 4L7.5 20.5H3.5v-4L16.5 3.5z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path d="M14 6l4 4" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function ShapeGlyph() {
+  // Two overlapping shapes (rect + circle) read as "shape library" at a glance.
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect
+        x="3"
+        y="3"
+        width="12"
+        height="12"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <circle cx="16" cy="16" r="5" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function ArrowGlyph() {
+  // Horizontal line + arrowhead, pointing right.
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <line
+        x1="3"
+        y1="12"
+        x2="17"
+        y2="12"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M21 12 L14 7 L14 17 Z"
+        fill="currentColor"
+        stroke="currentColor"
+        strokeWidth="0.5"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

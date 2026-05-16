@@ -29,6 +29,12 @@ export function ImageElement({
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
+    if (e.ctrlKey || e.metaKey) {
+      // Ctrl/Cmd-click toggles this element in/out of the multi-selection;
+      // no drag (the user is just adjusting the selection set).
+      dispatch({ type: "TOGGLE_ELEMENT_SELECTION", id: element.id });
+      return;
+    }
     if (!isSelected) {
       dispatch({ type: "SELECT_ELEMENT", id: element.id });
     }
