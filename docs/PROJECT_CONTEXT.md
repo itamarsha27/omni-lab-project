@@ -170,7 +170,7 @@ omni-lab-project/
 - `[id]/edit/lab-editor-actions.tsx` — client: editable title + File dropdown menu
 - `[id]/edit/lab-editor-actions.tsx` — File menu: Rename, Publish (disabled), Initiate (disabled), Delete
 
-**`apps/web/src/app/labs/[id]/edit/elements/` (M2.2 + M2.2 polish + M2.2b inline eq + M2.3 quiz + M2.4 image/video):**
+**`apps/web/src/app/labs/[id]/edit/elements/` (M2.2–M2.5):**
 - `text-element.tsx` — TipTap-based rich text element (StarterKit + Color + TextStyle + TextAlign + Tables + Placeholder + InlineEquation node); hosts the inline-equation popup (insert + edit modes)
 - `equation-element.tsx` — KaTeX view + floating font-size toolbar on select + MathLive popup (via `EquationPopup`)
 - `equation-popup.tsx` — **shared** MathLive popup component; used by both `equation-element.tsx` and `text-element.tsx`. Props: `initialLatex`, `getAnchorRect: () => DOMRect | null`, optional `fontSize`/`onFontSizeChange`, optional `onDraftChange`, `onCommit`, `onCancel`
@@ -182,9 +182,15 @@ omni-lab-project/
 - `video-element.tsx` — static thumbnail + play button overlay + platform badge. No iframe in editor. Dark placeholder for Vimeo / unrecognised URLs.
 - `video-sidebar.tsx` — URL input with live green/red parse status.
 - `video-url.ts` — `parseVideoUrl()` + `videoThumbnailUrl()` (YouTube + Vimeo).
-- `element-handles.tsx` — 8 resize handles + 4 invisible drag-frame strips around the selection outline
-- `element-toolbar.tsx` — `T` / `∑` / image / video / `?` palette buttons; image+video use inline SVG glyphs; `quizDisabled` prop
-- `use-element-drag.ts` — shared drag hook with horizontal snap to slide left / center / right
+- `shape-element.tsx` — SVG renderer for 9 shape kinds (rectangle, circle, triangle, line, arrow, vector, arrow-double, arrow-curved, ground, spring); fill, stroke, strokeStyle (solid/dashed/dotted), label (KaTeX-rendered), CSS rotation. Arrow-like kinds position the label past the tip in arrow-local coordinates so it stays "ahead of" the tip at any angle.
+- `shape-sidebar.tsx` — fill/stroke color pickers, stroke width slider, stroke style (solid/dashed/dotted), 4 direction buttons (0/90/180/270°), label input with live KaTeX preview.
+- `drawing-element.tsx` — freehand pen canvas: SVG with a `viewBox` so strokes scale with the element; `pointerdown/move/up` capture + commit loop; click-to-select then draw pattern (first click selects, subsequent pointer events draw); Ctrl/Cmd-click toggles multi-select.
+- `drawing-sidebar.tsx` — color picker + pen width slider + "Clear drawing" button.
+- `group-element.tsx` — GroupElement renderer: positioned rotated wrapper containing statically-rendered children in group-local coords; transparent overlay handles click/drag without children intercepting.
+- `multi-select-handles.tsx` — combined bounding-box frame for multi-selected elements (2+); drag strips move all selected elements together via `MOVE_ELEMENTS_LIVE`; "Group" button dispatches `GROUP_SELECTED`.
+- `element-handles.tsx` — 8 resize handles + 4 drag-frame strips + rotation handle (circle above top edge); resize is rotation-aware (anchor-point stays fixed in canvas space); 45° snap (hold Shift to bypass); supports `ShapeElement` and `GroupElement` rotation field.
+- `element-toolbar.tsx` — `T` / `∑` / image / video / `?` / shape / pencil palette buttons; `quizDisabled` prop
+- `use-element-drag.ts` — shared drag hook with horizontal snap; extended with `otherElements` prop for future alignment guides
 - `font-size-control.tsx` — shared `−` / numeric input / ▾ presets / `+` Word-style controller (used in equation popup AND text format toolbar)
 - `font-family-control.tsx` — 11-font dropdown (Inter default + Calibri / David / etc., previewed in their own font)
 
@@ -192,9 +198,9 @@ omni-lab-project/
 - Shared header: logo-mark (links to /) + Settings + auth buttons + My Labs link
 - Rendered in root layout — appears on every page
 
-**`packages/lab-content/` (created in M2.1):**
-- `src/types.ts` — discriminated union of 11 element types + 6 quiz question kinds
-- `src/index.ts` — `createDefaultSlide` / `createBlankSlide` / `createTextElement` / `createEquationElement` / `parseLabContent` + `CANVAS_WIDTH` / `CANVAS_HEIGHT`
+**`packages/lab-content/` (created in M2.1, extended through M2.5):**
+- `src/types.ts` — discriminated union of 12 element types (`GroupElement` added M2.5) + 6 quiz question kinds. `ShapeKind` expanded to 9 variants (added vector, arrow-double, arrow-curved, ground, spring in M2.5). `ShapeElement` gained `label?`, `strokeStyle?`, `rotation?`. `DrawingElement` gained `currentColor` + `currentWidth`; stroke coords are now element-local (not 1920×1080 global). `GroupElement` is a recursive container with `children: SlideElement[]` + `rotation?`.
+- `src/index.ts` — `createDefaultSlide` / `createBlankSlide` / `createTextElement` / `createEquationElement` / `createImageElement` / `createVideoElement` / `createQuizElement` / `createDrawingElement` / `createShapeElement` / `createArrowElement` / `createGroupFromElements` / `ungroupElement` / `parseLabContent` + `CANVAS_WIDTH` / `CANVAS_HEIGHT` / `ARROW_LIKE_KINDS`
 - `TextElement.fontSize?` and `TextElement.fontFamily?` added in M2.2 polish
 
 **Future packages (planned, not yet created):**
@@ -246,20 +252,19 @@ Defense-in-depth uniqueness: the `Answer` and `Participant` constraints exist bo
 
 ### Next
 
-**M2.5 — Freehand Drawing + Shapes (START HERE)**
+**M2.6 — Desmos graph widget (START HERE)**
 
-Step 5 of the locked M2 build order.
+Step 6 of the locked M2 build order.
 
-**Freehand drawing (Q13):** Teachers can sketch freely on the canvas — diagrams, annotations, free-body diagrams, arrows. `DrawingElement` type already exists in `types.ts` with `strokes: DrawingStroke[]` (each stroke is an array of `[x, y]` points + color + width). Build in this order:
-1. A drawing mode toggle (pencil icon in the toolbar, or a mode button near the canvas).
-2. On canvas: `pointerdown` starts a new stroke, `pointermove` appends points, `pointerup` commits. Store at canvas-px resolution (1920×1080 space).
-3. Render with `<canvas>` or SVG `<polyline>` elements overlaid on the slide — SVG is simpler for the coordinate math.
-4. Undo/redo: each committed stroke is one step (use the existing `SNAPSHOT` + action pattern).
-5. Color picker + stroke-width picker in the sidebar or a small floating toolbar.
+Teacher configures a function graph at authoring time; students view only. Key design points:
+- `DesmosElement` type (already exists as `PhysicsElement`-adjacent stub — or add a new type).
+- Embed the Desmos API (`<iframe>` or the JS calculator API) inside the element container.
+- Teacher can add expressions (`y = x² + c`) and sliders (`c` from 0 to 10) from the sidebar.
+- In the editor the Desmos calculator is interactive for the teacher only.
+- In preview/session mode students see the graph as configured (view-only or with sliders, TBD).
+- Thumbnail: render a static screenshot or a miniaturized Desmos embed.
 
-**Shapes (Q14):** Rectangle, circle, triangle, arrow, line. `ShapeElement` type already exists (`shape: ShapeKind`, `fill`, `stroke`, `strokeWidth`). Render as SVG. Drag-from-toolbar to insert; resize handles already work. Sidebar: fill color, stroke color, stroke width.
-
-**Open question before starting:** Should drawing mode be a canvas-wide "paint mode" (cursor changes, all canvas clicks draw) or should a freehand drawing block be dragged from the toolbar like text/equation? The latter keeps the same mental model as every other element and plays better with undo/redo. Recommend: drag-from-toolbar to create a `DrawingElement` container; drawing happens inside that box.
+Note: Desmos's embed API is free for education. Use `@desmos-labs/api` or load the script tag. The iframe approach is simpler but may capture mouse events on the canvas — use the same "no interaction until selected" pattern as `DrawingElement`.
 
 ---
 
@@ -276,6 +281,44 @@ Key implementation notes:
 - **Video sidebar** shows live green/red parse status ("youtube · dQw4w9WgXcQ" or "Not a recognized YouTube or Vimeo URL") as the teacher types.
 - Toolbar buttons use inline SVGs that inherit `currentColor` so they stay visually consistent with the letter-glyph T / ∑ / ? buttons.
 - **S3 upload follow-up**: when the bucket is provisioned, add a presigned-URL server action and an "Upload" button to `ImageSidebar`. The `ImageElement.assetId?` field is already reserved for this path.
+
+**M2.5 — Freehand Drawing + Shapes + Groups + Multi-select + Rotation (complete, 2026-05-17)**
+
+Commit: `de22be7`. The largest single-session build so far (2 930 net lines). Key decisions and implementation notes:
+
+**DrawingElement renderer (`drawing-element.tsx`):**
+- Freehand pen implemented as SVG polylines inside a `viewBox`-ed `<svg>`. Element-local coords (0..width, 0..height) so strokes scale proportionally when the element is resized — much simpler than 1920×1080 absolute space.
+- Click-to-select / then draw pattern (mirrors Google Slides): first pointer event on an unselected drawing box just selects it; subsequent events capture strokes. Avoids the confusing "drop-and-immediately-draw" UX.
+- Each stroke bakes its own `color` + `width` at commit time; `currentColor` / `currentWidth` on the element drive the sidebar but don't retroactively change existing strokes.
+- `DrawingSidebar`: color picker (HTML `<input type="color">`) + pen width slider + "Clear drawing" (empties `strokes[]`).
+
+**ShapeElement renderer (`shape-element.tsx`):**
+- SVG renderer for 9 shape kinds: rectangle, circle, triangle, line, arrow, vector, arrow-double, arrow-curved, ground, spring. The physics-oriented set (vector, ground, spring) is the STEM moat.
+- `ShapeKind` union is exhaustive (`assertNever` in the switch) — new kinds fail to compile if not handled.
+- `label?: string` renders via KaTeX on the shape; label position is shape-aware (arrow labels sit past the tip in element-local coords, so they stay "ahead of the tip" at any rotation angle).
+- CSS rotation (`rotation?: number`) on the wrapper + counter-rotation on the KaTeX label keeps text upright regardless of shape angle.
+- `ShapeSidebar`: fill/stroke color pickers, stroke width slider, stroke style (solid/dashed/dotted via SVG `strokeDasharray`), direction buttons (0/90/180/270°), label input with live KaTeX preview.
+
+**GroupElement (`group-element.tsx`):**
+- Recursive container: `children: SlideElement[]` store element-local coords (relative to group origin). CSS `transform: rotate(Rdeg)` on the wrapper rotates all children as a unit.
+- Ungrouping bakes group coords + rotation back to canvas space (children's positions are rotated around the group center; children's own `rotation` fields accumulate the group's rotation).
+- Transparent pointer-event overlay handles group-level click/drag; children have `pointerEvents: none` so they don't intercept.
+- `GROUP_SELECTED` reducer action: computes the union bbox of all selected elements, converts each child's canvas coords to group-local coords, inserts the `GroupElement`, removes the originals.
+- `UNGROUP_ELEMENT` reducer action: inverse — re-inserts children at canvas coords, removes the group.
+
+**Multi-select (`multi-select-handles.tsx` + reducer changes):**
+- `selectedElementId: string | null` → `selectedElementIds: string[]` throughout. Single-select = length 1; nothing selected = empty array. All element components receive and handle this.
+- Ctrl/Cmd-click dispatches `TOGGLE_ELEMENT_SELECTION` — flips presence in the array.
+- Lasso: mousedown on blank canvas background starts a rectangle drag. Threshold = 4 screen-px before it becomes a lasso (below that, mouseup clears selection — same as the old click-deselect). Mouseup hits all elements whose bbox intersects the lasso rectangle and dispatches `SELECT_ELEMENTS`.
+- `MOVE_ELEMENTS_LIVE`: moves all selected elements together (one undo step per drag).
+- `DELETE_ELEMENTS`: deletes all ids in one reducer step.
+- `MultiSelectHandles`: union-bbox frame with drag-strips for moving the set, plus a "Group" button.
+
+**Rotation handles (`element-handles.tsx`):**
+- Circular handle rendered above the top edge of the selection outline (22 px diameter, 28 px gap).
+- Drag: tracks `atan2(cursor - element center)` → converts to degrees → dispatches `UPDATE_ELEMENT` with new `rotation` on mouseup (one undo step).
+- 45° snap grid (snaps within 5°); hold Shift to bypass and rotate freely.
+- Resize handles are now rotation-aware: the anchor point (corner opposite to the dragged handle) is computed in canvas space before resize begins, and the new top-left is derived by rotating the anchor back after computing the new size. This prevents the "drifting element" bug where resizing a rotated shape would also translate it.
 
 **M2.3 — Quiz Blocks (complete, 2026-05-12)**
 
@@ -389,9 +432,9 @@ The user's auto-memory directory at `~/.claude/projects/.../memory/` is *also* p
 
 ---
 
-*Last updated: 2026-05-13. M2.4 (Image + Video blocks) shipped: URL-embed-only (S3 not yet provisioned). YouTube thumbnail preview + play overlay in the editor canvas; Vimeo falls back to dark placeholder (no cheap thumbnail URL). Live parse-status in video sidebar. `PaletteType` extended to `"image"|"video"`. Next: M2.5 — Freehand drawing + Shapes.*
+*Last updated: 2026-05-17. M2.5 (Drawing + Shapes + Groups + Multi-select + Rotation) shipped. Commit `de22be7`. Next: M2.6 — Desmos graph widget.*
 
-*Carry-forward stale note from 2026-05-12: Q22 (one-blank-per-equation) and the "fill-in-the-blank is the primary mode" line in the Equation answers section are stale — equation-fill kind was removed in M2.3. Both should be deleted or rewritten when editing this file next.*
+*Stale note carried forward: Q22 (one-blank-per-equation) and the "fill-in-the-blank is the primary mode" line in the Equation answers section are stale — equation-fill kind was removed in M2.3. Rewrite when editing next.*
 
 ---
 
